@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Kisaan Krushi</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <i class="fa-solid fa-leaf"></i>
+                Kisaan Krushi
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="#" class="active" data-page="dashboard"><i class="fa-solid fa-chart-pie"></i> Dashboard</a></li>
+                <li id="nav-admins" class="hidden"><a href="#" data-page="admins"><i class="fa-solid fa-user-tie"></i> Admins</a></li>
+                <li><a href="#" data-page="surveyors"><i class="fa-solid fa-users"></i> Surveyors</a></li>
+                <li><a href="#" data-page="surveys"><i class="fa-solid fa-clipboard-list"></i> Surveys</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <ul>
+                    <li><a href="#" id="logout-btn" class="text-danger"><i class="fa-solid fa-sign-out-alt"></i> Logout</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button class="mobile-toggle-btn" id="mobile-toggle-btn">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div>
+                        <h2 id="page-title">Dashboard Overview</h2>
+                        <p class="text-light" id="current-date"></p>
+                    </div>
+                </div>
+                
+                <div class="header-actions">
+                    <button class="btn btn-outline" id="theme-toggle"><i class="fa-solid fa-moon"></i></button>
+                    <div class="user-info">
+                        <div class="avatar" id="admin-avatar">A</div>
+                        <span style="font-weight: 500;" id="admin-name">Admin User</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Page -->
+            <div id="page-dashboard" class="page-section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+                        <div class="stat-details">
+                            <h3 id="total-surveys">0</h3>
+                            <p>Total Surveys</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="color: var(--secondary-color); background-color: rgba(251,192,45,0.1);"><i class="fa-solid fa-users"></i></div>
+                        <div class="stat-details">
+                            <h3 id="total-surveyors">0</h3>
+                            <p>Active Surveyors</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="color: #1976d2; background-color: rgba(25,118,210,0.1);"><i class="fa-solid fa-seedling"></i></div>
+                        <div class="stat-details">
+                            <h3 id="top-crop">-</h3>
+                            <p>Top Crop</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map Container -->
+                <div class="card mt-3" style="position: relative; z-index: 1;">
+                    <div style="padding: 24px;">
+                        <h3 style="margin-bottom: 15px; font-size: 1.125rem;">Coverage Map</h3>
+                        <div id="survey-map" style="height: 400px; width: 100%; border-radius: var(--radius); z-index: 0;"></div>
+                    </div>
+                </div>
+
+                <div class="charts-grid mt-3">
+                    <div class="chart-card">
+                        <h3>Crop Distribution</h3>
+                        <canvas id="cropChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Surveys by District</h3>
+                        <canvas id="districtChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Surveys per Surveyor</h3>
+                        <canvas id="surveyorChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Surveyors Page -->
+            <div id="page-surveyors" class="page-section hidden">
+                <div class="table-card">
+                    <div class="table-header">
+                        <h2 style="margin: 0; font-size: 1.25rem;">Surveyor Management</h2>
+                        <button class="btn btn-primary" id="open-add-surveyor-btn"><i class="fa-solid fa-plus"></i> Add Surveyor</button>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="surveyors-table">
+                            <thead>
+                                <tr>
+                                    <th>Surveyor</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>District</th>
+                                    <th>Surveys</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admins Page (CEO Only) -->
+            <div id="page-admins" class="page-section hidden">
+                <div class="table-card">
+                    <div class="table-header">
+                        <h2 style="margin: 0; font-size: 1.25rem;">Admin Management</h2>
+                        <button class="btn btn-primary" id="open-add-admin-btn"><i class="fa-solid fa-user-shield"></i> Add Admin</button>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="admins-table">
+                            <thead>
+                                <tr>
+                                    <th>Admin</th>
+                                    <th>Email</th>
+                                    <th>Joined</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Surveys Page -->
+            <div id="page-surveys" class="page-section hidden">
+                <div class="table-card">
+                    <div class="table-header">
+                        <h2 style="margin: 0; font-size: 1.25rem;">Survey Data</h2>
+                        <button class="btn btn-success" id="export-csv-btn" style="background-color: var(--success-color); color: white;"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+                    </div>
+                    
+                    <div class="table-filters mb-3">
+                        <input type="text" id="filter-surveyor" placeholder="Filter by Surveyor">
+                        <input type="text" id="filter-district" placeholder="Filter by District">
+                        <input type="text" id="filter-village" placeholder="Filter by Village">
+                        <input type="text" id="filter-crop" placeholder="Filter by Crop">
+                    </div>
+
+                    <div style="overflow-x: auto;">
+                        <table id="surveys-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Farmer Name</th>
+                                    <th>Location</th>
+                                    <th>Crop</th>
+                                    <th>Surveyor</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nlr-footer">
+                Developed By NLR Group of Company
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Surveyor Modal -->
+    <div class="modal-overlay" id="add-surveyor-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Add New Surveyor</h3>
+                <button class="modal-close" id="close-surveyor-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="add-surveyor-form">
+                    <div class="input-group">
+                        <label for="surveyor-name">Full Name</label>
+                        <input type="text" id="surveyor-name" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="surveyor-email">Email Address</label>
+                        <input type="email" id="surveyor-email" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="surveyor-phone">Phone Number</label>
+                        <input type="tel" id="surveyor-phone" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="surveyor-district">Assigned District</label>
+                        <input type="text" id="surveyor-district" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="surveyor-password">Temporary Password</label>
+                        <input type="password" id="surveyor-password" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-2" id="submit-surveyor-btn">Create Surveyor Account</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Admin Modal (CEO Only) -->
+    <div class="modal-overlay" id="add-admin-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Add New Admin</h3>
+                <button class="modal-close" id="close-admin-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="add-admin-form">
+                    <div class="input-group">
+                        <label for="new-admin-name">Full Name</label>
+                        <input type="text" id="new-admin-name" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="new-admin-email">Email Address</label>
+                        <input type="email" id="new-admin-email" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="new-admin-password">Temporary Password</label>
+                        <input type="password" id="new-admin-password" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-2" id="submit-admin-btn">Create Admin Account</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Survey Details Modal -->
+    <div class="modal-overlay" id="survey-details-modal">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>Survey Details</h3>
+                <button class="modal-close" id="close-survey-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="survey-details-content">
+                <!-- Content injected dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/admin.js"></script>
+    <script>
+        document.getElementById('current-date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        
+        // Mobile Sidebar Toggle
+        const mobileToggleBtn = document.getElementById('mobile-toggle-btn');
+        const sidebar = document.getElementById('sidebar');
+        
+        if (mobileToggleBtn && sidebar) {
+            mobileToggleBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('open');
+            });
+
+            // Close sidebar when clicking outside on mobile
+            document.addEventListener('click', (e) => {
+                if (window.innerWidth <= 768) {
+                    if (!sidebar.contains(e.target) && !mobileToggleBtn.contains(e.target) && sidebar.classList.contains('open')) {
+                        sidebar.classList.remove('open');
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

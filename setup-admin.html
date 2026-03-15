@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Setup - Kisaan Krushi</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="auth-wrapper">
+        <div class="auth-card">
+            <div class="logo-container">
+                <i class="fa-solid fa-leaf"></i>
+            </div>
+            <h2>Kisaan Krushi Setup</h2>
+            <p style="color: var(--text-light); margin-bottom: 20px;">Create the First Admin Account</p>
+            
+            <form id="setup-admin-form">
+                <div class="input-group">
+                    <label for="admin-name">Full Name</label>
+                    <input type="text" id="admin-name" value="Lokesh" required>
+                </div>
+
+                <div class="input-group">
+                    <label for="admin-email">Email</label>
+                    <input type="email" id="admin-email" value="lokesh@kk.com" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="admin-password">Password</label>
+                    <input type="text" id="admin-password" value="aadhayareddy" required minlength="6">
+                </div>
+                
+                <button type="submit" class="btn btn-primary" id="setup-btn">
+                    <span id="setup-text">Create Admin</span>
+                    <i class="fa-solid fa-spinner fa-spin hidden" id="setup-spinner"></i>
+                </button>
+            </form>
+            
+            <p id="setup-message" class="mt-2 hidden" style="font-size: 0.875rem;"></p>
+            
+            <div class="mt-3">
+                <a href="login.html" class="btn btn-outline" style="width: 100%;"><i class="fa-solid fa-arrow-left"></i> Go to Login</a>
+            </div>
+            <div class="nlr-footer auth-footer">
+                Developed By NLR Group of Company
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module">
+        import { auth, db } from "./js/firebase-config.js";
+        import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { ref, set } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+        document.getElementById('setup-admin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('admin-name').value;
+            const email = document.getElementById('admin-email').value;
+            const password = document.getElementById('admin-password').value;
+            
+            const btnText = document.getElementById('setup-text');
+            const spinner = document.getElementById('setup-spinner');
+            const msg = document.getElementById('setup-message');
+            
+            msg.classList.add('hidden');
+            btnText.classList.add('hidden');
+            spinner.classList.remove('hidden');
+            
+            try {
+                // 1. Try to create User, if it fails because it exists, just sign in
+                let uid;
+                try {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    uid = userCredential.user.uid;
+                } catch (createError) {
+                    if(createError.code === 'auth/email-already-in-use') {
+                        // User exists, sign in instead to get UID
+                        const { signInWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js");
+                        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                        uid = userCredential.user.uid;
+                    } else {
+                        throw createError;
+                    }
+                }
+                
+                // Determine if this is the CEO
+                const isAdminCEO = email.toLowerCase() === 'nlr@kk.com';
+                
+                // 2. Add/Update admins node in Realtime Database
+                await set(ref(db, `admins/${uid}`), {
+                    adminID: uid,
+                    name: name,
+                    email: email,
+                    role: isAdminCEO ? 'ceo' : 'admin',
+                    createdAt: new Date().toISOString()
+                });
+                
+                msg.textContent = "Admin account synchronized successfully! You can now go to login.";
+                msg.style.color = "var(--success-color)";
+                msg.classList.remove('hidden');
+                
+            } catch (error) {
+                msg.textContent = error.message.replace('Firebase:', '').trim();
+                msg.style.color = "var(--error-color)";
+                msg.classList.remove('hidden');
+            } finally {
+                btnText.classList.remove('hidden');
+                spinner.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

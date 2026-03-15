@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Kisaan Krushi</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="auth-wrapper">
+        <div class="auth-card">
+            <div class="logo-container">
+                <i class="fa-solid fa-leaf"></i>
+            </div>
+            <h2>Kisaan Krushi</h2>
+            
+            <form id="login-form">
+                <div class="input-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" placeholder="example@survey.com" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" placeholder="••••••••" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" id="login-btn">
+                    <span id="login-text">Sign In</span>
+                    <i class="fa-solid fa-spinner fa-spin hidden" id="login-spinner"></i>
+                </button>
+            </form>
+            
+            <p id="error-message" class="mt-2 hidden" style="color: var(--error-color); font-size: 0.875rem;"></p>
+            
+            <div class="nlr-footer auth-footer">
+                Developed By NLR Group of Company
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module" src="js/auth.js"></script>
+</body>
+</html>

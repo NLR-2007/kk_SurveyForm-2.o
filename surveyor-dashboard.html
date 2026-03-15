@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surveyor Dashboard - Kisaan Krushi</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <i class="fa-solid fa-leaf"></i>
+                Kisaan Krushi
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="#" class="active"><i class="fa-solid fa-clipboard-list"></i> My Surveys</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <ul>
+                    <li><a href="#" id="logout-btn" class="text-danger"><i class="fa-solid fa-sign-out-alt"></i> Logout</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button class="mobile-toggle-btn" id="mobile-toggle-btn">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div>
+                        <h1 id="page-title">My Surveys</h1>
+                        <p style="color: var(--text-light)" id="date-display">Surveyor Dashboard</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-outline" id="theme-toggle"><i class="fa-solid fa-moon"></i></button>
+                    <div class="user-info">
+                        <div class="avatar" id="surveyor-avatar">S</div>
+                        <span style="font-weight: 500;" id="surveyor-name">Loading...</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+                    <div class="stat-details">
+                        <h3 id="my-total-surveys">0</h3>
+                        <p>Total Surveys Submitted</p>
+                    </div>
+                </div>
+                <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='survey-form.html'">
+                    <div class="stat-icon" style="color: white; background-color: var(--primary-color);"><i class="fa-solid fa-plus"></i></div>
+                    <div class="stat-details">
+                        <h3 style="color: var(--primary-color);">Create New</h3>
+                        <p>Start a new Farmer Survey</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="color: #f57f17; background-color: rgba(251,192,45,0.1);"><i class="fa-solid fa-wifi"></i></div>
+                    <div class="stat-details">
+                        <h3 id="pending-sync">0</h3>
+                        <p>Offline Records Pending Sync</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-card">
+                <div class="table-header">
+                    <h2 style="margin: 0; font-size: 1.25rem;">Recent Submissions</h2>
+                    <button class="btn btn-outline" id="sync-btn"><i class="fa-solid fa-rotate-right"></i> Sync Data</button>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table id="my-surveys-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Farmer Name</th>
+                                <th>Village/Mandal</th>
+                                <th>Crop</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated dynamically by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="nlr-footer">
+                Developed By NLR Group of Company
+            </div>
+        </main>
+    </div>
+
+    <!-- Survey Details Modal -->
+    <div class="modal-overlay" id="survey-details-modal">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>Survey Details</h3>
+                <button class="modal-close" id="close-survey-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="survey-details-content">
+                <!-- Content injected dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/surveyor.js"></script>
+    <script>
+        // Set offline sync status
+        function updateOfflineStatus() {
+            const pending = JSON.parse(localStorage.getItem('offlineSurveys') || '[]');
+            document.getElementById('pending-sync').innerText = pending.length;
+        }
+        updateOfflineStatus();
+        window.addEventListener('storage', updateOfflineStatus);
+        
+        // Mobile Sidebar Toggle
+        const mobileToggleBtn = document.getElementById('mobile-toggle-btn');
+        const sidebar = document.getElementById('sidebar');
+        
+        if (mobileToggleBtn && sidebar) {
+            mobileToggleBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('open');
+            });
+
+            // Close sidebar when clicking outside on mobile
+            document.addEventListener('click', (e) => {
+                if (window.innerWidth <= 768) {
+                    if (!sidebar.contains(e.target) && !mobileToggleBtn.contains(e.target) && sidebar.classList.contains('open')) {
+                        sidebar.classList.remove('open');
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

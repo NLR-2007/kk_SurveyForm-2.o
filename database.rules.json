@@ -1,0 +1,17 @@
+{
+  "rules": {
+    "admins": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "surveyors": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "surveys": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["surveyorID", "surveyDate", "district", "crop"]
+    }
+  }
+}
