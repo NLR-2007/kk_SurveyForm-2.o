@@ -3,7 +3,7 @@ import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/
 import { showToast } from "./auth.js";
 import { syncOfflineData } from "./survey.js";
 
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxF9f1Dm_AlufYqNEctWyGrVSLpA4oSwbm_e9xhmkMpm-j1Hm7ZLQ6yWPQELFzd0-kQ/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3TnxHd-FktxaFVqhMpKypWkUh1Zzyz3x-uaxWQkECqzLilZVeP5u-HcGPOFqW3kpQKw/exec';
 let userSurveys = {};
 
 document.addEventListener('DOMContentLoaded', () => {

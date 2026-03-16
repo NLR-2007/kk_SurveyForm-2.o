@@ -1,7 +1,7 @@
 import { db } from "./firebase-config.js";
 import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxF9f1Dm_AlufYqNEctWyGrVSLpA4oSwbm_e9xhmkMpm-j1Hm7ZLQ6yWPQELFzd0-kQ/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx3TnxHd-FktxaFVqhMpKypWkUh1Zzyz3x-uaxWQkECqzLilZVeP5u-HcGPOFqW3kpQKw/exec';
 
 const logDiv = document.getElementById('log');
 function logMessage(msg) {
