@@ -452,13 +452,15 @@ function updateSurveyorsTable() {
 
         const surveyorName = surveyor.name || 'Unknown Surveyor';
         
+        const surveyorIdStr = String(surveyor.surveyorID || '');
+        
         tr.innerHTML = `
             <td>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div class="avatar" style="width: 32px; height: 32px; font-size: 0.875rem;">${surveyorName.charAt(0)}</div>
                     <div>
                         <div style="font-weight: 500;">${surveyorName}</div>
-                        <div style="font-size: 0.75rem; color: var(--text-light);">${surveyor.surveyorID.slice(0, 8)}...</div>
+                        <div style="font-size: 0.75rem; color: var(--text-light);">${surveyorIdStr ? surveyorIdStr.slice(0, 8) + '...' : 'Unknown ID'}</div>
                     </div>
                 </div>
             </td>
