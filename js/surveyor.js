@@ -57,26 +57,44 @@ async function fetchMySurveys(surveyorID) {
 
             if (data && data.length > 0) {
                 data.forEach(survey => {
-                    if (survey.SurveyorID === surveyorID) {
-                        // Map Sheet Headers to JS Object Keys
-                        userSurveys[survey.SurveyID] = {
-                            surveyID: survey.SurveyID,
-                            surveyDate: survey.Date,
-                            farmerName: survey.FarmerName,
-                            phone: survey.Phone,
-                            state: survey.State,
-                            district: survey.District,
-                            mandal: survey.Mandal,
-                            village: survey.Village,
-                            latitude: survey.Latitude,
-                            longitude: survey.Longitude,
-                            crop: survey.Crop,
-                            landSize: survey.LandSize,
-                            suggestion: survey.Suggestion,
-                            photoURL: survey.PhotoURL,
-                            audioURL: survey.AudioURL,
-                            surveyorID: survey.SurveyorID
-                        };
+                    const currentSurveyorID = survey.SurveyorID || survey.surveyorID;
+                    if (currentSurveyorID === surveyorID) {
+                        const surveyID = survey.SurveyID || survey.surveyID || survey.id;
+                        const surveyDate = survey.Date || survey.date || survey.SurveyDate || survey.surveyDate;
+                        const farmerName = survey.FarmerName || survey.farmerName || survey.name;
+                        const phone = survey.Phone || survey.phone;
+                        const state = survey.State || survey.state;
+                        const district = survey.District || survey.district;
+                        const mandal = survey.Mandal || survey.mandal;
+                        const village = survey.Village || survey.village;
+                        const latitude = survey.Latitude || survey.latitude;
+                        const longitude = survey.Longitude || survey.longitude;
+                        const crop = survey.Crop || survey.crop;
+                        const landSize = survey.LandSize || survey.landSize;
+                        const suggestion = survey.Suggestion || survey.suggestion;
+                        const photoURL = survey.PhotoURL || survey.photoURL || survey.photoUrl;
+                        const audioURL = survey.AudioURL || survey.audioURL || survey.audioUrl;
+
+                        if (surveyID) {
+                            userSurveys[surveyID] = {
+                                surveyID: surveyID,
+                                surveyDate: surveyDate,
+                                farmerName: farmerName,
+                                phone: phone,
+                                state: state,
+                                district: district,
+                                mandal: mandal,
+                                village: village,
+                                latitude: latitude,
+                                longitude: longitude,
+                                crop: crop,
+                                landSize: landSize,
+                                suggestion: suggestion,
+                                photoURL: photoURL,
+                                audioURL: audioURL,
+                                surveyorID: currentSurveyorID
+                            };
+                        }
                     }
                 });
             }

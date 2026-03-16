@@ -248,15 +248,25 @@ async function fetchSurveyors() {
     surveyorsData = {};
     if (result.status === 'success' && result.data) {
         result.data.forEach(s => {
-            surveyorsData[s.SurveyorID] = {
-                surveyorID: s.SurveyorID,
-                name: s.Name,
-                email: s.Email,
-                phone: s.Phone,
-                district: s.District,
-                isActive: s.IsActive === true || s.IsActive === 'TRUE' || s.IsActive === 'true',
-                createdAt: s.CreatedAt
-            };
+            const surveyorID = s.SurveyorID || s.surveyorID || s.id;
+            const name = s.Name || s.name;
+            const email = s.Email || s.email;
+            const phone = s.Phone || s.phone;
+            const district = s.District || s.district;
+            const isActive = s.IsActive !== undefined ? s.IsActive : s.isActive;
+            const createdAt = s.CreatedAt || s.createdAt;
+
+            if(surveyorID) {
+                surveyorsData[surveyorID] = {
+                    surveyorID: surveyorID,
+                    name: name,
+                    email: email,
+                    phone: phone,
+                    district: district,
+                    isActive: isActive === true || isActive === 'TRUE' || isActive === 'true',
+                    createdAt: createdAt
+                };
+            }
         });
     }
 }
@@ -276,24 +286,43 @@ async function fetchSurveys() {
     surveysData = {};
     if (result.status === 'success' && result.data) {
         result.data.forEach(survey => {
-            surveysData[survey.SurveyID] = {
-                surveyID: survey.SurveyID,
-                surveyDate: survey.Date,
-                farmerName: survey.FarmerName,
-                phone: survey.Phone,
-                state: survey.State,
-                district: survey.District,
-                mandal: survey.Mandal,
-                village: survey.Village,
-                latitude: survey.Latitude,
-                longitude: survey.Longitude,
-                crop: survey.Crop,
-                landSize: survey.LandSize,
-                suggestion: survey.Suggestion,
-                photoURL: survey.PhotoURL,
-                audioURL: survey.AudioURL,
-                surveyorID: survey.SurveyorID
-            };
+            const surveyID = survey.SurveyID || survey.surveyID || survey.id;
+            const surveyDate = survey.Date || survey.date || survey.SurveyDate || survey.surveyDate;
+            const farmerName = survey.FarmerName || survey.farmerName || survey.name;
+            const phone = survey.Phone || survey.phone;
+            const state = survey.State || survey.state;
+            const district = survey.District || survey.district;
+            const mandal = survey.Mandal || survey.mandal;
+            const village = survey.Village || survey.village;
+            const latitude = survey.Latitude || survey.latitude;
+            const longitude = survey.Longitude || survey.longitude;
+            const crop = survey.Crop || survey.crop;
+            const landSize = survey.LandSize || survey.landSize;
+            const suggestion = survey.Suggestion || survey.suggestion;
+            const photoURL = survey.PhotoURL || survey.photoURL || survey.photoUrl;
+            const audioURL = survey.AudioURL || survey.audioURL || survey.audioUrl;
+            const surveyorID = survey.SurveyorID || survey.surveyorID;
+
+            if (surveyID) {
+                surveysData[surveyID] = {
+                    surveyID: surveyID,
+                    surveyDate: surveyDate,
+                    farmerName: farmerName,
+                    phone: phone,
+                    state: state,
+                    district: district,
+                    mandal: mandal,
+                    village: village,
+                    latitude: latitude,
+                    longitude: longitude,
+                    crop: crop,
+                    landSize: landSize,
+                    suggestion: suggestion,
+                    photoURL: photoURL,
+                    audioURL: audioURL,
+                    surveyorID: surveyorID
+                };
+            }
         });
     }
 }
@@ -313,14 +342,23 @@ async function fetchAdmins() {
     adminsData = {};
     if (result.status === 'success' && result.data) {
         result.data.forEach(a => {
-            adminsData[a.AdminID] = {
-                adminID: a.AdminID,
-                name: a.Name,
-                email: a.Email,
-                role: a.Role,
-                isActive: a.IsActive === true || a.IsActive === 'TRUE' || a.IsActive === 'true',
-                createdAt: a.CreatedAt
-            };
+            const adminID = a.AdminID || a.adminID || a.id;
+            const name = a.Name || a.name;
+            const email = a.Email || a.email;
+            const role = a.Role || a.role;
+            const isActive = a.IsActive !== undefined ? a.IsActive : a.isActive;
+            const createdAt = a.CreatedAt || a.createdAt;
+
+            if(adminID) {
+                adminsData[adminID] = {
+                    adminID: adminID,
+                    name: name,
+                    email: email,
+                    role: role,
+                    isActive: isActive === true || isActive === 'TRUE' || isActive === 'true',
+                    createdAt: createdAt
+                };
+            }
         });
     }
 }
