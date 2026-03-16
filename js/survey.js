@@ -1,5 +1,4 @@
 import { db } from "./firebase-config.js";
-import { ref, push, set } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { showToast } from "./auth.js";
 
 // State
@@ -219,23 +218,95 @@ document.addEventListener('DOMContentLoaded', () => {
             const surveyorID = userData.uid || userData.surveyorID;
             
             try {
-                // Process media: convert files/blobs directly to Base64 strings
-                let processedPhotoBase64 = null;
-                if (photoBase64) { // photoBase64 is already a base64 string from photo capture
-                    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing Photo...';
-                    processedPhotoBase64 = photoBase64;
-                }
-
-                let processedAudioBase64 = null;
-                if (audioBlob) {
-                    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing Audio...';
-                    processedAudioBase64 = await convertBlobToBase64(audioBlob);
-                }
-
                 // Prepare Survey Data Document
-                submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving Data...';
+                const surveyID = `SRV_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                let finalPhotoURL = null;
+                let finalAudioURL = null;
+
+                // Upload Media to Google Drive via Apps Script
+                const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxF9f1Dm_AlufYqNEctWyGrVSLpA4oSwbm_e9xhmkMpm-j1Hm7ZLQ6yWPQELFzd0-kQ/exec';
+
+                if (photoBase64) {
+                    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading Photo to Drive...';
+                    const photoPayload = {
+                        action: 'upload_file',
+                        mimeType: 'image/jpeg',
+                        fileName: `Photo_${surveyID}.jpg`,
+                        base64: photoBase64
+                    };
+                    
+                    try {
+                        const response = await fetch(GOOGLE_SCRIPT_URL, {
+                            method: 'POST',
+                            body: JSON.stringify(photoPayload),
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' } // text/plain prevents CORS preflight issues sometimes
+                        });
+                        const rawText = await response.text();
+                        console.log("Photo Upload Raw Response:", rawText);
+                        
+                        let result;
+                        try {
+                            result = JSON.parse(rawText);
+                        } catch(jsonErr) {
+                            console.error("Failed to parse JSON for Photo Upload:", jsonErr);
+                            throw new Error('Server returned invalid data format for photo: ' + rawText.substring(0, 50));
+                        }
+
+                        if (result.status === 'success') {
+                            finalPhotoURL = result.url;
+                        } else {
+                            throw new Error('Photo upload failed: ' + result.message);
+                        }
+                    } catch (err) {
+                        console.error('Drive Upload Error (Photo):', err);
+                        throw new Error('Failed to upload photo to Google Drive. Check console for details: ' + err.message);
+                    }
+                }
+
+                if (audioBlob) {
+                    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading Audio to Drive...';
+                    const audioBase64 = await convertBlobToBase64(audioBlob);
+                    const audioPayload = {
+                        action: 'upload_file',
+                        mimeType: 'audio/webm',
+                        fileName: `Audio_${surveyID}.webm`,
+                        base64: audioBase64
+                    };
+                    
+                    try {
+                        const response = await fetch(GOOGLE_SCRIPT_URL, {
+                            method: 'POST',
+                            body: JSON.stringify(audioPayload),
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                        });
+                        
+                        const rawText = await response.text();
+                        console.log("Audio Upload Raw Response:", rawText);
+                        
+                        let result;
+                        try {
+                            result = JSON.parse(rawText);
+                        } catch(jsonErr) {
+                            console.error("Failed to parse JSON for Audio Upload:", jsonErr);
+                             throw new Error('Server returned invalid data format for audio: ' + rawText.substring(0, 50));
+                        }
+
+                        if (result.status === 'success') {
+                            finalAudioURL = result.url;
+                        } else {
+                            throw new Error('Audio upload failed: ' + result.message);
+                        }
+                    } catch (err) {
+                        console.error('Drive Upload Error (Audio):', err);
+                        throw new Error('Failed to upload audio to Google Drive. Check console for details: ' + err.message);
+                    }
+                }
+
+                submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving Data to Google Sheets...';
+                
+                const dateIso = new Date().toISOString();
                 const surveyData = {
-                    surveyID: `SRV_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                    surveyID: surveyID,
                     farmerName: document.getElementById('farmer-name').value,
                     phone: document.getElementById('phone').value,
                     state: document.getElementById('state').value,
@@ -247,16 +318,37 @@ document.addEventListener('DOMContentLoaded', () => {
                     crop: document.getElementById('crop').value,
                     landSize: parseFloat(document.getElementById('land-size').value),
                     suggestion: document.getElementById('suggestion').value,
-                    photoURL: processedPhotoBase64, // Now stores Base64 string
-                    audioURL: processedAudioBase64, // Now stores Base64 string
+                    photoURL: finalPhotoURL,
+                    audioURL: finalAudioURL,
                     surveyorID: surveyorID,
-                    surveyDate: new Date().toISOString()
+                    surveyDate: dateIso
                 };
+
+                // Create the Array format exactly matching the Sheet Headers
+                // Headers: SurveyID, Date, FarmerName, Phone, State, District, Mandal, Village, Latitude, Longitude, Crop, LandSize, Suggestion, PhotoURL, AudioURL, SurveyorID
+                const rowData = [
+                    surveyData.surveyID,
+                    surveyData.surveyDate,
+                    surveyData.farmerName,
+                    surveyData.phone,
+                    surveyData.state,
+                    surveyData.district,
+                    surveyData.mandal,
+                    surveyData.village,
+                    surveyData.latitude,
+                    surveyData.longitude,
+                    surveyData.crop,
+                    surveyData.landSize,
+                    surveyData.suggestion,
+                    surveyData.photoURL || '',
+                    surveyData.audioURL || '',
+                    surveyData.surveyorID
+                ];
 
                 // Check Network Status
                 if (navigator.onLine) {
-                    await submitSurveyOnline(surveyData);
-                    showToast('Survey submitted successfully!', 'success');
+                    await submitSurveyOnline(rowData, GOOGLE_SCRIPT_URL);
+                    showToast('Survey saved to Google Sheets successfully!', 'success');
                 } else {
                     saveSurveyOffline(surveyData);
                     showToast('Saved offline. Sync when connected to internet.', 'warning');
@@ -286,16 +378,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Submit Online Helper
-async function submitSurveyOnline(surveyData) {
+// Submit Online Helper (Google Sheets API)
+async function submitSurveyOnline(rowData, scriptUrl) {
     try {
-        // Save DB Record directly with Base64 data
-        const newSurveyRef = ref(db, `surveys/${surveyData.surveyID}`);
-        await set(newSurveyRef, surveyData);
+        const payload = {
+            action: 'append_row',
+            sheetName: 'Surveys',
+            rowData: rowData
+        };
+
+        const response = await fetch(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+        });
+        
+        const rawText = await response.text();
+        let result;
+        try {
+            result = JSON.parse(rawText);
+        } catch(e) {
+             throw new Error("Invalid response from Google Sheets API: " + rawText.substring(0, 50));
+        }
+
+        if (result.status !== 'success') {
+            throw new Error(result.message);
+        }
         
         return true;
     } catch (error) {
-        throw new Error(`Failed to upload to Firebase: ${error.message}`);
+        throw new Error(`Failed to save to Google Sheets: ${error.message}`);
     }
 }
 
@@ -320,8 +432,11 @@ const base64ToBlob = async (base64) => {
 async function saveSurveyOffline(surveyData, photoDataUrl, audioBlobObj) {
     const offlineSurveys = JSON.parse(localStorage.getItem('offlineSurveys') || '[]');
     
-    // Convert audio blob to base64 for storage
-    const audioBase64 = await blobToBase64(audioBlobObj);
+    // Convert audio blob to base64 for storage if it exists
+    let audioBase64 = null;
+    if (audioBlobObj) {
+        audioBase64 = await convertBlobToBase64(audioBlobObj);
+    }
     
     const pendingRecord = {
         tempId: surveyData.surveyID,
@@ -358,8 +473,71 @@ export async function syncOfflineData() {
 
     for (const record of offlineSurveys) {
         try {
-            const audioBlobObj = await base64ToBlob(record.audioBase64);
-            await submitSurveyOnline(record.data, record.photoBase64, audioBlobObj);
+            // Since offline surveys already store base64 directly, we can just upload them to drive now during sync
+            const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxF9f1Dm_AlufYqNEctWyGrVSLpA4oSwbm_e9xhmkMpm-j1Hm7ZLQ6yWPQELFzd0-kQ/exec';
+            let finalPhotoURL = record.data.photoURL; // Might already be a URL if logic changed, but usually base64 here
+            let finalAudioURL = record.data.audioURL;
+
+            // Upload Photo if exists in pending record
+            if (record.photoBase64) {
+                 const photoPayload = {
+                    action: 'upload_file',
+                    mimeType: 'image/jpeg',
+                    fileName: `Photo_Sync_${record.tempId}.jpg`,
+                    base64: record.photoBase64
+                };
+                const photoRes = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(photoPayload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                const photoResult = await photoRes.json();
+                if(photoResult.status === 'success') finalPhotoURL = photoResult.url;
+            }
+
+            // Upload Audio if exists in pending record
+            if (record.audioBase64) {
+                 const audioPayload = {
+                    action: 'upload_file',
+                    mimeType: 'audio/webm',
+                    fileName: `Audio_Sync_${record.tempId}.webm`,
+                    base64: record.audioBase64
+                };
+                const audioRes = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(audioPayload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                const audioResult = await audioRes.json();
+                if(audioResult.status === 'success') finalAudioURL = audioResult.url;
+            }
+
+            // Update record data with actual URLs
+            record.data.photoURL = finalPhotoURL;
+            record.data.audioURL = finalAudioURL;
+
+            // Create array format
+            const rowData = [
+                record.data.surveyID,
+                record.data.surveyDate,
+                record.data.farmerName,
+                record.data.phone,
+                record.data.state,
+                record.data.district,
+                record.data.mandal,
+                record.data.village,
+                record.data.latitude,
+                record.data.longitude,
+                record.data.crop,
+                record.data.landSize,
+                record.data.suggestion,
+                record.data.photoURL || '',
+                record.data.audioURL || '',
+                record.data.surveyorID
+            ];
+
+            // Save to Google Sheets
+            await submitSurveyOnline(rowData, GOOGLE_SCRIPT_URL);
             successCount++;
         } catch (error) {
             console.error('Sync failed for record', record.tempId, error);

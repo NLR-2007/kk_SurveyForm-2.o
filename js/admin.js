@@ -1,6 +1,5 @@
-import { db, secondaryAuth } from "./firebase-config.js";
+import { secondaryAuth } from "./firebase-config.js";
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { ref, onValue, set, remove, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 import { showToast } from "./auth.js";
 
 // Global data to hold state
@@ -12,6 +11,8 @@ let isCEO = false;
 let cropChartInstance = null;
 let districtChartInstance = null;
 let surveyorChartInstance = null;
+
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxF9f1Dm_AlufYqNEctWyGrVSLpA4oSwbm_e9xhmkMpm-j1Hm7ZLQ6yWPQELFzd0-kQ/exec';
 
 let surveyMap = null;
 let mapMarkers = [];
@@ -59,10 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize Map
     initMap();
 
-    // Fetch Data
-    fetchSurveyors();
-    fetchSurveys();
-    if (isCEO) fetchAdmins();
+    // Fetch Data from Google Sheets
+    fetchAllData();
 
     // Setup ADD Surveyor form
     const addSurveyorBtn = document.getElementById('open-add-surveyor-btn');
@@ -93,13 +92,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
             const newUid = userCredential.user.uid;
 
-            // Save to Database
-            await set(ref(db, `surveyors/${newUid}`), {
-                surveyorID: newUid,
-                name, email, phone, district,
-                isActive: true,
-                createdAt: new Date().toISOString()
+            // Save to Google Sheets via POST
+            const payload = {
+                action: 'append_row',
+                sheetName: 'Surveyors',
+                rowData: [
+                    newUid,
+                    name,
+                    email,
+                    phone,
+                    district,
+                    true, // isActive
+                    new Date().toISOString()
+                ]
+            };
+
+            await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' }
             });
+
+            // Refresh Local State
+            fetchAllData();
 
             showToast('Surveyor created successfully!', 'success');
             addSurveyorModal.classList.remove('active');
@@ -139,13 +154,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
                 const newUid = userCredential.user.uid;
 
-                await set(ref(db, `admins/${newUid}`), {
-                    adminID: newUid,
-                    name, email,
-                    role: 'admin',
-                    isActive: true,
-                    createdAt: new Date().toISOString()
+                const payload = {
+                    action: 'append_row',
+                    sheetName: 'Admins',
+                    rowData: [
+                        newUid,
+                        name,
+                        email,
+                        'admin', // role
+                        true, // isActive
+                        new Date().toISOString()
+                    ]
+                };
+
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
                 });
+
+                // Refresh Data
+                fetchAllData();
 
                 showToast('Admin created successfully!', 'success');
                 addAdminModal.classList.remove('active');
@@ -181,36 +210,95 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('export-csv-btn').addEventListener('click', exportToCSV);
 });
 
-// Fetch Surveyors
-function fetchSurveyors() {
-    const surveyorsRef = ref(db, 'surveyors');
-    onValue(surveyorsRef, (snapshot) => {
-        surveyorsData = snapshot.val() || {};
+// Master Fetch Function
+async function fetchAllData() {
+    try {
+        await Promise.all([
+            fetchSurveyors(),
+            fetchSurveys(),
+            isCEO ? fetchAdmins() : Promise.resolve()
+        ]);
+        
+        // Update all UI elements once data is mapped
         updateSurveyorsTable();
-        updateDashboardStats();
-    });
-}
-
-// Fetch Surveys
-function fetchSurveys() {
-    const surveysRef = ref(db, 'surveys');
-    onValue(surveysRef, (snapshot) => {
-        surveysData = snapshot.val() || {};
         updateSurveyTable();
-        updateSurveyorsTable(); // Added to update counts live
         updateDashboardStats();
         renderCharts();
         updateMapMarkers();
-    });
+        if (isCEO) updateAdminsTable();
+        
+    } catch (err) {
+        console.error("Error fetching data from Google Sheets:", err);
+        showToast("Error loading dashboard data", "error");
+    }
+}
+
+// Fetch Surveyors
+async function fetchSurveyors() {
+    const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Surveyors`);
+    const result = await res.json();
+    surveyorsData = {};
+    if (result.status === 'success' && result.data) {
+        result.data.forEach(s => {
+            surveyorsData[s.SurveyorID] = {
+                surveyorID: s.SurveyorID,
+                name: s.Name,
+                email: s.Email,
+                phone: s.Phone,
+                district: s.District,
+                isActive: s.IsActive === true || s.IsActive === 'TRUE' || s.IsActive === 'true',
+                createdAt: s.CreatedAt
+            };
+        });
+    }
+}
+
+// Fetch Surveys
+async function fetchSurveys() {
+    const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Surveys`);
+    const result = await res.json();
+    surveysData = {};
+    if (result.status === 'success' && result.data) {
+        result.data.forEach(survey => {
+            surveysData[survey.SurveyID] = {
+                surveyID: survey.SurveyID,
+                surveyDate: survey.Date,
+                farmerName: survey.FarmerName,
+                phone: survey.Phone,
+                state: survey.State,
+                district: survey.District,
+                mandal: survey.Mandal,
+                village: survey.Village,
+                latitude: survey.Latitude,
+                longitude: survey.Longitude,
+                crop: survey.Crop,
+                landSize: survey.LandSize,
+                suggestion: survey.Suggestion,
+                photoURL: survey.PhotoURL,
+                audioURL: survey.AudioURL,
+                surveyorID: survey.SurveyorID
+            };
+        });
+    }
 }
 
 // Fetch Admins
-function fetchAdmins() {
-    const adminsRef = ref(db, 'admins');
-    onValue(adminsRef, (snapshot) => {
-        adminsData = snapshot.val() || {};
-        updateAdminsTable();
-    });
+async function fetchAdmins() {
+    const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Admins`);
+    const result = await res.json();
+    adminsData = {};
+    if (result.status === 'success' && result.data) {
+        result.data.forEach(a => {
+            adminsData[a.AdminID] = {
+                adminID: a.AdminID,
+                name: a.Name,
+                email: a.Email,
+                role: a.Role,
+                isActive: a.IsActive === true || a.IsActive === 'TRUE' || a.IsActive === 'true',
+                createdAt: a.CreatedAt
+            };
+        });
+    }
 }
 
 // Render Admins Table (CEO Only)
@@ -270,8 +358,19 @@ function updateAdminsTable() {
             if(confirm('Are you sure you want to completely remove this admin from the system?')) {
                 const id = e.currentTarget.getAttribute('data-id');
                 try {
-                    await remove(ref(db, `admins/${id}`));
+                    const payload = {
+                        action: 'delete_row',
+                        sheetName: 'Admins',
+                        keyColumn: 0, // AdminID is Col A (0)
+                        keyValue: id
+                    };
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify(payload),
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                    });
                     showToast('Admin removed from database.', 'success');
+                    fetchAllData();
                 } catch(err) {
                     showToast('Error removing: ' + err.message, 'error');
                 }
@@ -286,8 +385,22 @@ function updateAdminsTable() {
             const isActive = e.currentTarget.getAttribute('data-active') === 'true';
             
             try {
-                await set(ref(db, `admins/${id}/isActive`), !isActive);
+                const payload = {
+                    action: 'update_row',
+                    sheetName: 'Admins',
+                    keyColumn: 0,
+                    keyValue: id,
+                    updateData: {
+                        4: !isActive // IsActive is index 4 (Col E)
+                    }
+                };
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
                 showToast(`Admin account ${isActive ? 'disabled' : 'enabled'}.`, 'success');
+                fetchAllData();
             } catch(err) {
                 showToast('Error updating status: ' + err.message, 'error');
             }
@@ -349,8 +462,20 @@ function updateSurveyorsTable() {
                 if(confirm('Are you sure you want to remove this surveyor from the database? (Note: Authentication deletion requires Firebase Admin SDK. This only removes DB access).')) {
                     const id = e.currentTarget.getAttribute('data-id');
                     try {
-                        await remove(ref(db, `surveyors/${id}`));
+                        const payload = {
+                            action: 'delete_row',
+                            sheetName: 'Surveyors',
+                            keyColumn: 0,
+                            keyValue: id
+                        };
+                        await fetch(GOOGLE_SCRIPT_URL, {
+                            method: 'POST',
+                            body: JSON.stringify(payload),
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                        });
+
                         showToast('Surveyor removed from database.', 'success');
+                        fetchAllData();
                     } catch(err) {
                         showToast('Error removing: ' + err.message, 'error');
                     }
@@ -366,8 +491,23 @@ function updateSurveyorsTable() {
             const isActive = e.currentTarget.getAttribute('data-active') === 'true';
             
             try {
-                await set(ref(db, `surveyors/${id}/isActive`), !isActive);
+                const payload = {
+                    action: 'update_row',
+                    sheetName: 'Surveyors',
+                    keyColumn: 0,
+                    keyValue: id,
+                    updateData: {
+                        5: !isActive // IsActive is index 5 (Col F)
+                    }
+                };
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+
                 showToast(`Surveyor account ${isActive ? 'disabled' : 'enabled'}.`, 'success');
+                fetchAllData();
             } catch(err) {
                 showToast('Error updating status: ' + err.message, 'error');
             }
@@ -429,8 +569,19 @@ function updateSurveyTable() {
                 if(confirm('Are you sure you want to PERMANENTLY delete this survey record?')) {
                     const id = e.currentTarget.getAttribute('data-id');
                     try {
-                        await remove(ref(db, `surveys/${id}`));
+                        const payload = {
+                            action: 'delete_row',
+                            sheetName: 'Surveys',
+                            keyColumn: 0,
+                            keyValue: id
+                        };
+                        await fetch(GOOGLE_SCRIPT_URL, {
+                            method: 'POST',
+                            body: JSON.stringify(payload),
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                        });
                         showToast('Survey permanently deleted.', 'success');
+                        fetchAllData();
                     } catch(err) {
                         showToast('Error deleting survey: ' + err.message, 'error');
                     }
@@ -450,15 +601,47 @@ function viewSurveyDetails(surveyID) {
     // Format timestamp
     const date = new Date(survey.surveyDate).toLocaleString();
 
-    let audioHtml = survey.audioURL ? `
-        <div class="mt-2" style="background-color: var(--bg-color); padding: 15px; border-radius: var(--radius);">
-            <p style="margin-bottom: 8px; font-weight: 600;">Farmer Suggestion Audio</p>
-            <audio id="preview-audio-player" controls src="${survey.audioURL}" style="width: 100%;"></audio>
-        </div>
-    ` : '<p class="mt-2" style="color: var(--text-light);">No audio recorded.</p>';
+    let audioHtml = '<p class="mt-2" style="color: var(--text-light);">No audio recorded.</p>';
+    if (survey.audioURL) {
+        if (typeof survey.audioURL === 'string' && survey.audioURL.includes('drive.google.com') && survey.audioURL.includes('id=')) {
+            const fileId = survey.audioURL.split('id=')[1].split('&')[0];
+            audioHtml = `
+            <div class="mt-2" style="background-color: var(--bg-color); padding: 15px; border-radius: var(--radius);">
+                <p style="margin-bottom: 8px; font-weight: 600;">Farmer Suggestion Audio</p>
+                <div style="position: relative; width: 100%; height: 80px; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border-color);">
+                   <iframe src="https://drive.google.com/file/d/${fileId}/preview" width="100%" height="80" style="border: none;"></iframe>
+                </div>
+                <div class="mt-1" style="text-align: right;">
+                    <a href="${survey.audioURL}" target="_blank" style="font-size: 0.8rem; color: var(--primary-color);">Open in Google Drive <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                </div>
+            </div>`;
+        } else {
+             audioHtml = `
+            <div class="mt-2" style="background-color: var(--bg-color); padding: 15px; border-radius: var(--radius);">
+                <p style="margin-bottom: 8px; font-weight: 600;">Farmer Suggestion Audio</p>
+                <audio id="preview-audio-player" controls src="${survey.audioURL}" style="width: 100%;"></audio>
+            </div>`;
+        }
+    }
 
     let mapLink = survey.latitude && survey.longitude ? 
         `<a href="https://www.google.com/maps?q=${survey.latitude},${survey.longitude}" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-map"></i> View on Maps</a>` : 'No GPS';
+
+    let photoDisplay = '<p>No photo captured.</p>';
+    if (survey.photoURL) {
+        if (typeof survey.photoURL === 'string' && survey.photoURL.includes('drive.google.com') && survey.photoURL.includes('id=')) {
+            const fileId = survey.photoURL.split('id=')[1].split('&')[0];
+            photoDisplay = `
+            <div style="position: relative; width: 100%; max-width: 400px; height: 350px; margin: 0 auto; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border-color);">
+                <iframe src="https://drive.google.com/file/d/${fileId}/preview" width="100%" height="100%" style="border: none;"></iframe>
+            </div>
+            <div class="mt-2 text-center">
+                <a href="${survey.photoURL}" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Full Image</a>
+            </div>`;
+        } else {
+            photoDisplay = `<a href="${survey.photoURL}" target="_blank" title="Click to view full image"><img src="${survey.photoURL}" style="max-width: 100%; max-height: 300px; border-radius: var(--radius); border: 1px solid var(--border-color);"></a>`;
+        }
+    }
 
     content.innerHTML = `
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
@@ -490,7 +673,7 @@ function viewSurveyDetails(surveyID) {
         
         <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; margin-top: 20px;">Enclosure</h4>
         <div style="text-align: center;">
-            ${survey.photoURL ? `<a href="${survey.photoURL}" target="_blank"><img src="${survey.photoURL}" style="max-width: 100%; max-height: 300px; border-radius: var(--radius);"></a>` : '<p>No photo captured.</p>'}
+            ${photoDisplay}
         </div>
     `;
 

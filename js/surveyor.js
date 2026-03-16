@@ -1,8 +1,9 @@
-import { db } from "./firebase-config.js";
-import { ref, query, orderByChild, equalTo, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { auth } from "./firebase-config.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { showToast } from "./auth.js";
 import { syncOfflineData } from "./survey.js";
 
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxF9f1Dm_AlufYqNEctWyGrVSLpA4oSwbm_e9xhmkMpm-j1Hm7ZLQ6yWPQELFzd0-kQ/exec';
 let userSurveys = {};
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -36,19 +37,53 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-function fetchMySurveys(surveyorID) {
+async function fetchMySurveys(surveyorID) {
     if(!surveyorID) return;
     
-    // Query surveys where surveyorID equals current user
-    const surveysRef = query(ref(db, 'surveys'), orderByChild('surveyorID'), equalTo(surveyorID));
-    
-    onValue(surveysRef, (snapshot) => {
-        userSurveys = snapshot.val() || {};
-        updateMySurveysTable();
-        
-        // Update Stats
-        document.getElementById('my-total-surveys').innerText = Object.keys(userSurveys).length;
-    });
+    try {
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Surveys`);
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            const data = result.data;
+            userSurveys = {}; // Reset
+
+            if (data && data.length > 0) {
+                data.forEach(survey => {
+                    if (survey.SurveyorID === surveyorID) {
+                        // Map Sheet Headers to JS Object Keys
+                        userSurveys[survey.SurveyID] = {
+                            surveyID: survey.SurveyID,
+                            surveyDate: survey.Date,
+                            farmerName: survey.FarmerName,
+                            phone: survey.Phone,
+                            state: survey.State,
+                            district: survey.District,
+                            mandal: survey.Mandal,
+                            village: survey.Village,
+                            latitude: survey.Latitude,
+                            longitude: survey.Longitude,
+                            crop: survey.Crop,
+                            landSize: survey.LandSize,
+                            suggestion: survey.Suggestion,
+                            photoURL: survey.PhotoURL,
+                            audioURL: survey.AudioURL,
+                            surveyorID: survey.SurveyorID
+                        };
+                    }
+                });
+            }
+            
+            updateMySurveysTable();
+            
+            // Update Stats
+            document.getElementById('my-total-surveys').innerText = Object.keys(userSurveys).length;
+        } else {
+            console.error('Error fetching from Google Sheets:', result.message);
+        }
+    } catch (error) {
+         console.error('Error fetching surveys:', error);
+    }
 }
 
 function updateMySurveysTable() {
@@ -100,12 +135,28 @@ function viewSurveyDetails(survey) {
     const content = document.getElementById('survey-details-content');
     const date = new Date(survey.surveyDate).toLocaleString();
 
-    let audioHtml = survey.audioURL ? `
-        <div class="mt-2" style="background-color: var(--bg-color); padding: 15px; border-radius: var(--radius);">
-            <p style="margin-bottom: 8px; font-weight: 600;">Farmer Suggestion Audio</p>
-            <audio id="preview-audio-player" controls src="${survey.audioURL}" style="width: 100%;"></audio>
-        </div>
-    ` : '<p class="mt-2" style="color: var(--text-light);">No audio recorded.</p>';
+    let audioHtml = '<p class="mt-2" style="color: var(--text-light);">No audio recorded.</p>';
+    if (survey.audioURL) {
+        if (typeof survey.audioURL === 'string' && survey.audioURL.includes('drive.google.com') && survey.audioURL.includes('id=')) {
+            const fileId = survey.audioURL.split('id=')[1].split('&')[0];
+            audioHtml = `
+            <div class="mt-2" style="background-color: var(--bg-color); padding: 15px; border-radius: var(--radius);">
+                <p style="margin-bottom: 8px; font-weight: 600;">Farmer Suggestion Audio</p>
+                <div style="position: relative; width: 100%; height: 80px; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border-color);">
+                   <iframe src="https://drive.google.com/file/d/${fileId}/preview" width="100%" height="80" style="border: none;"></iframe>
+                </div>
+                <div class="mt-1" style="text-align: right;">
+                    <a href="${survey.audioURL}" target="_blank" style="font-size: 0.8rem; color: var(--primary-color);">Open in Google Drive <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                </div>
+            </div>`;
+        } else {
+             audioHtml = `
+            <div class="mt-2" style="background-color: var(--bg-color); padding: 15px; border-radius: var(--radius);">
+                <p style="margin-bottom: 8px; font-weight: 600;">Farmer Suggestion Audio</p>
+                <audio id="preview-audio-player" controls src="${survey.audioURL}" style="width: 100%;"></audio>
+            </div>`;
+        }
+    }
 
     let mapLink = (survey.latitude && survey.longitude) ? 
         `<a href="https://www.google.com/maps?q=${survey.latitude},${survey.longitude}" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-map"></i> View on Maps</a>` : 'No GPS';
@@ -114,10 +165,21 @@ function viewSurveyDetails(survey) {
         ? '<div class="mb-2 p-2" style="background-color: var(--secondary-color); color: #000; border-radius: var(--radius);"><i class="fa-solid fa-triangle-exclamation"></i> This survey is saved offline. Connect to internet and click Sync Data. Media files cannot be previewed until synced.</div>'
         : '';
 
-    // If pending, usually the photoURL is a base64 string, so we can still show it!
-    const photoDisplay = survey.photoURL 
-        ? `<img src="${survey.photoURL}" style="max-width: 100%; max-height: 300px; border-radius: var(--radius);">` 
-        : '<p>No photo captured.</p>';
+    let photoDisplay = '<p>No photo captured.</p>';
+    if (survey.photoURL) {
+        if (typeof survey.photoURL === 'string' && survey.photoURL.includes('drive.google.com') && survey.photoURL.includes('id=')) {
+            const fileId = survey.photoURL.split('id=')[1].split('&')[0];
+            photoDisplay = `
+            <div style="position: relative; width: 100%; max-width: 400px; height: 350px; margin: 0 auto; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border-color);">
+                <iframe src="https://drive.google.com/file/d/${fileId}/preview" width="100%" height="100%" style="border: none;"></iframe>
+            </div>
+            <div class="mt-2 text-center">
+                <a href="${survey.photoURL}" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Full Image</a>
+            </div>`;
+        } else {
+            photoDisplay = `<a href="${survey.photoURL}" target="_blank" title="Click to view full image"><img src="${survey.photoURL}" style="max-width: 100%; max-height: 300px; border-radius: var(--radius); border: 1px solid var(--border-color);"></a>`;
+        }
+    }
 
     content.innerHTML = `
         ${statusMsg}
