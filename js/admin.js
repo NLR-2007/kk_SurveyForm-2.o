@@ -1,6 +1,4 @@
-import { secondaryAuth } from "./firebase-config.js";
-import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { showToast } from "./auth.js";
+import { showToast, hashPassword } from "./auth.js";
 
 // Global data to hold state
 let surveyorsData = {};
@@ -12,7 +10,7 @@ let cropChartInstance = null;
 let districtChartInstance = null;
 let surveyorChartInstance = null;
 
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxF9f1Dm_AlufYqNEctWyGrVSLpA4oSwbm_e9xhmkMpm-j1Hm7ZLQ6yWPQELFzd0-kQ/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-aBhSAfN3-8Vk-1LAYCkhpKBHkflLofPDVS2rI8sXXeQGQu3JxgvMpJYQ2giubccYnQ/exec';
 
 let surveyMap = null;
 let mapMarkers = [];
@@ -23,16 +21,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const adminAvatar = document.getElementById('admin-avatar');
     
     // Set user info
-    const userData = JSON.parse(localStorage.getItem('userData'));
-    if (userData) {
-        if (userData.name) {
-            adminName.textContent = userData.name + (userData.role === 'ceo' ? ' (CEO)' : '');
-            adminAvatar.textContent = userData.name.charAt(0).toUpperCase();
-        }
-        if (userData.role === 'ceo') {
-            isCEO = true;
-            document.getElementById('nav-admins').classList.remove('hidden');
-        }
+    const userData = JSON.parse(localStorage.getItem('userData')) || {};
+    const role = String(userData.role || '').toLowerCase();
+    
+    if (userData.name) {
+        adminName.textContent = userData.name + (role === 'ceo' ? ' (CEO)' : '');
+        adminAvatar.textContent = String(userData.name).charAt(0).toUpperCase();
+    }
+    
+    // Crucial: Show/Hide Admins nav based on role (case-insensitive)
+    if (role === 'ceo') {
+        isCEO = true;
+        const navAdmins = document.getElementById('nav-admins');
+        if (navAdmins) navAdmins.classList.remove('hidden');
     }
     
     // Sidebar Navigation
@@ -81,25 +82,25 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating...';
 
-        const name = document.getElementById('surveyor-name').value;
-        const email = document.getElementById('surveyor-email').value;
-        const phone = document.getElementById('surveyor-phone').value;
-        const district = document.getElementById('surveyor-district').value;
+        const name = document.getElementById('surveyor-name').value.trim();
+        const email = document.getElementById('surveyor-email').value.trim();
+        const phone = document.getElementById('surveyor-phone').value.trim();
+        const district = document.getElementById('surveyor-district').value.trim();
         const password = document.getElementById('surveyor-password').value;
 
         try {
-            // Create user in Auth (using secondary app to NOT logout admin)
-            const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-            const newUid = userCredential.user.uid;
+            const hashedPassword = await hashPassword(password);
+            const surveyorID = `SRV_${Date.now()}`;
 
-            // Save to Google Sheets via POST
+            // Save to Google Sheets via create_user action
             const payload = {
-                action: 'append_row',
+                action: 'create_user',
                 sheetName: 'Surveyors',
                 rowData: [
-                    newUid,
+                    surveyorID,
                     name,
                     email,
+                    hashedPassword,
                     phone,
                     district,
                     true, // isActive
@@ -107,15 +108,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 ]
             };
 
-            await fetch(GOOGLE_SCRIPT_URL, {
+            const res = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 body: JSON.stringify(payload),
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' }
             });
+            const result = await res.json();
+            if (result.status !== 'success') throw new Error(result.message || 'Failed to save surveyor.');
 
-            // Refresh Local State
             fetchAllData();
-
             showToast('Surveyor created successfully!', 'success');
             addSurveyorModal.classList.remove('active');
             addSurveyorForm.reset();
@@ -146,36 +147,38 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating...';
 
-            const name = document.getElementById('new-admin-name').value;
-            const email = document.getElementById('new-admin-email').value;
+            const name = document.getElementById('new-admin-name').value.trim();
+            const email = document.getElementById('new-admin-email').value.trim();
             const password = document.getElementById('new-admin-password').value;
 
             try {
-                const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-                const newUid = userCredential.user.uid;
+                const hashedPassword = await hashPassword(password);
+                const adminID = `ADM_${Date.now()}`;
+                const isAdminCEO = email.toLowerCase() === 'nlr@kk.com' || email.toLowerCase() === 'admin@kk.com';
 
                 const payload = {
-                    action: 'append_row',
+                    action: 'create_user',
                     sheetName: 'Admins',
                     rowData: [
-                        newUid,
+                        adminID,
                         name,
                         email,
-                        'admin', // role
+                        hashedPassword,
+                        isAdminCEO ? 'ceo' : 'admin', // role
                         true, // isActive
                         new Date().toISOString()
                     ]
                 };
 
-                await fetch(GOOGLE_SCRIPT_URL, {
+                const res = await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
                     body: JSON.stringify(payload),
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' }
                 });
+                const result = await res.json();
+                if (result.status !== 'success') throw new Error(result.message || 'Failed to save admin.');
 
-                // Refresh Data
                 fetchAllData();
-
                 showToast('Admin created successfully!', 'success');
                 addAdminModal.classList.remove('active');
                 addAdminForm.reset();
@@ -208,6 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Setup Export
     document.getElementById('export-csv-btn').addEventListener('click', exportToCSV);
+
 });
 
 // Master Fetch Function
@@ -235,7 +239,7 @@ async function fetchAllData() {
 
 // Fetch Surveyors
 async function fetchSurveyors() {
-    const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Surveyors`);
+    const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Surveyors&_=${Date.now()}`);
     const rawText = await res.text();
     let result;
     try {
@@ -273,7 +277,7 @@ async function fetchSurveyors() {
 
 // Fetch Surveys
 async function fetchSurveys() {
-    const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Surveys`);
+    const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Surveys&_=${Date.now()}`);
     const rawText = await res.text();
     let result;
     try {
@@ -329,7 +333,7 @@ async function fetchSurveys() {
 
 // Fetch Admins
 async function fetchAdmins() {
-    const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Admins`);
+    const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Admins&_=${Date.now()}`);
     const rawText = await res.text();
     let result;
     try {
@@ -369,42 +373,53 @@ function updateAdminsTable() {
     if (!tbody) return;
     tbody.innerHTML = '';
 
+    const currentUserData = JSON.parse(localStorage.getItem('userData'));
+    const currentUserId = currentUserData ? (currentUserData.adminID || currentUserData.AdminID || currentUserData.uid || '') : '';
+
     Object.values(adminsData).forEach(admin => {
         const tr = document.createElement('tr');
-        const isCurrentCEO = admin.role === 'ceo';
-        const isActive = admin.isActive !== false;
         
-        let actionBtn = '';
+        const adminID = admin.adminID;
+        const adminName = admin.name || 'Unknown';
+        const adminEmail = admin.email || 'No Email';
+        const adminRole = String(admin.role || '').toLowerCase();
+        const isActive = admin.isActive !== false;
+        const createdAt = admin.createdAt;
+
         let statusBadge = `<span class="badge ${isActive ? 'badge-success' : 'badge-warning'}">${isActive ? 'Active' : 'Inactive'}</span>`;
         let toggleBtn = '';
+        let actionBtn = '';
 
-        if (!isCurrentCEO) {
+        const isSelf = String(adminID) === String(currentUserId);
+        const isAdminCEO = adminRole === 'ceo';
+
+        if (!isAdminCEO && !isSelf) {
             actionBtn = `
-                <button class="btn btn-outline btn-sm delete-admin" data-id="${admin.adminID}" style="padding: 6px 10px; border-color: var(--error-color); color: var(--error-color);">
+                <button class="btn btn-outline btn-sm delete-admin" data-id="${adminID}" data-email="${adminEmail}" style="padding: 6px 10px; border-color: var(--error-color); color: var(--error-color);">
                     <i class="fa-solid fa-trash"></i>
                 </button>
             `;
-            
+        }
+
+        if (!isAdminCEO) {
             toggleBtn = `
-                <button class="btn btn-outline btn-sm toggle-admin" data-id="${admin.adminID}" data-active="${isActive}" style="padding: 6px 10px; margin-right: 5px;">
+                <button class="btn btn-outline btn-sm toggle-admin" data-id="${adminID}" data-email="${adminEmail}" data-active="${isActive}" style="padding: 6px 10px; margin-right: 5px;">
                     <i class="fa-solid ${isActive ? 'fa-ban' : 'fa-check'}"></i> ${isActive ? 'Disable' : 'Enable'}
                 </button>
             `;
         }
 
-        const adminName = admin.name || 'Unknown Admin';
-        
         tr.innerHTML = `
             <td>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div class="avatar" style="width: 32px; height: 32px; font-size: 0.875rem;">${adminName.charAt(0)}</div>
                     <div>
-                        <div style="font-weight: 500;">${adminName} ${isCurrentCEO ? '<span class="badge badge-primary" style="background:var(--gradient-primary);color:white">CEO</span>' : ''}</div>
+                        <div style="font-weight: 500;">${adminName} ${isAdminCEO ? '<span class="badge badge-primary" style="background:var(--gradient-primary);color:white">CEO</span>' : ''}</div>
                     </div>
                 </div>
             </td>
-            <td>${admin.email || 'No Email'}</td>
-            <td>${admin.createdAt ? new Date(admin.createdAt).toLocaleDateString() : 'N/A'}</td>
+            <td>${adminEmail}</td>
+            <td>${createdAt ? new Date(createdAt).toLocaleDateString() : 'N/A'}</td>
             <td>${statusBadge}</td>
             <td>
                 <div style="display: flex;">
@@ -416,57 +431,75 @@ function updateAdminsTable() {
         tbody.appendChild(tr);
     });
 
-    // Delete Event
+    // Delete Admin Event
     document.querySelectorAll('.delete-admin').forEach(btn => {
         btn.addEventListener('click', async (e) => {
-            if(confirm('Are you sure you want to completely remove this admin from the system?')) {
-                const id = e.currentTarget.getAttribute('data-id');
-                try {
-                    const payload = {
+            const btnEl = btn;
+            const id = btnEl.getAttribute('data-id');
+            const email = btnEl.getAttribute('data-email');
+            
+            if (!confirm('Are you sure you want to permanently remove this admin? They will be deleted from Google Sheets AND Firebase.')) return;
+            
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            
+            try {
+                // Delete from Google Sheets
+                const sheetRes = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
                         action: 'delete_row',
                         sheetName: 'Admins',
-                        keyColumn: 0, // AdminID is Col A (0)
+                        keyColumn: 0,
                         keyValue: id
-                    };
-                    await fetch(GOOGLE_SCRIPT_URL, {
-                        method: 'POST',
-                        body: JSON.stringify(payload),
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-                    });
-                    showToast('Admin removed from database.', 'success');
-                    fetchAllData();
-                } catch(err) {
-                    showToast('Error removing: ' + err.message, 'error');
+                    }),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                const sheetResult = await sheetRes.json();
+                if (sheetResult.status === 'error' && !sheetResult.message.includes('Not found')) {
+                    throw new Error('Sheet error: ' + sheetResult.message);
                 }
+
+                showToast('Admin permanently deleted!', 'success');
+                fetchAllData();
+            } catch(err) {
+                showToast('Deletion failed: ' + err.message, 'error');
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="fa-solid fa-trash"></i>';
             }
         });
     });
 
-    // Toggle Status Event
+    // Toggle Admin Status Event
     document.querySelectorAll('.toggle-admin').forEach(btn => {
         btn.addEventListener('click', async (e) => {
-            const id = e.currentTarget.getAttribute('data-id');
-            const isActive = e.currentTarget.getAttribute('data-active') === 'true';
+            const btnEl = btn;
+            const id = btnEl.getAttribute('data-id');
+            const email = btnEl.getAttribute('data-email');
+            const isActive = btnEl.getAttribute('data-active') === 'true';
+            btnEl.disabled = true;
             
             try {
-                const payload = {
-                    action: 'update_row',
-                    sheetName: 'Admins',
-                    keyColumn: 0,
-                    keyValue: id,
-                    updateData: {
-                        4: !isActive // IsActive is index 4 (Col E)
-                    }
-                };
-                await fetch(GOOGLE_SCRIPT_URL, {
+                // Update Google Sheets
+                const res = await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify({
+                        action: 'update_row',
+                        sheetName: 'Admins',
+                        keyColumn: 0,
+                        keyValue: id,
+                        updateData: { 5: !isActive } // IsActive is index 5 (col F: ID,Name,Email,Password,Role,IsActive)
+                    }),
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' }
                 });
-                showToast(`Admin account ${isActive ? 'disabled' : 'enabled'}.`, 'success');
+                const result = await res.json();
+                if (result.status === 'error') throw new Error('Sheet error: ' + result.message);
+
+                showToast(`Admin account ${isActive ? 'disabled' : 'enabled'} successfully!`, 'success');
                 fetchAllData();
             } catch(err) {
                 showToast('Error updating status: ' + err.message, 'error');
+                btnEl.disabled = false;
             }
         });
     });
@@ -475,9 +508,9 @@ function updateAdminsTable() {
 // Render Surveyors Table
 function updateSurveyorsTable() {
     const tbody = document.querySelector('#surveyors-table tbody');
+    if (!tbody) return;
     tbody.innerHTML = '';
     
-    // Calculate survey count per surveyor
     const counts = {};
     Object.values(surveysData).forEach(s => {
         counts[s.surveyorID] = (counts[s.surveyorID] || 0) + 1;
@@ -485,99 +518,114 @@ function updateSurveyorsTable() {
 
     Object.values(surveyorsData).forEach(surveyor => {
         const tr = document.createElement('tr');
+        const sID = surveyor.surveyorID;
+        const sName = surveyor.name || 'Unknown Surveyor';
+        const sEmail = surveyor.email || 'No Email';
+        const sPhone = surveyor.phone || 'No Phone';
+        const sDistrict = surveyor.district || 'All';
         const isActive = surveyor.isActive !== false;
-        let statusBadge = `<span class="badge ${isActive ? 'badge-success' : 'badge-warning'}">${isActive ? 'Active' : 'Inactive'}</span>`;
-
-        const surveyorName = surveyor.name || 'Unknown Surveyor';
         
-        const surveyorIdStr = String(surveyor.surveyorID || '');
+        let statusBadge = `<span class="badge ${isActive ? 'badge-success' : 'badge-warning'}">${isActive ? 'Active' : 'Inactive'}</span>`;
+        const sIDStr = String(sID || '');
         
         tr.innerHTML = `
             <td>
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <div class="avatar" style="width: 32px; height: 32px; font-size: 0.875rem;">${surveyorName.charAt(0)}</div>
+                    <div class="avatar" style="width: 32px; height: 32px; font-size: 0.875rem;">${sName.charAt(0)}</div>
                     <div>
-                        <div style="font-weight: 500;">${surveyorName}</div>
-                        <div style="font-size: 0.75rem; color: var(--text-light);">${surveyorIdStr ? surveyorIdStr.slice(0, 8) + '...' : 'Unknown ID'}</div>
+                        <div style="font-weight: 500;">${sName}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-light);">${sIDStr ? sIDStr.slice(0, 8) + '...' : 'Unknown ID'}</div>
                     </div>
                 </div>
             </td>
-            <td>${surveyor.email || 'No Email'}</td>
-            <td>${surveyor.phone || 'No Phone'}</td>
-            <td><span class="badge badge-success">${surveyor.district || 'All'}</span></td>
-            <td>${counts[surveyor.surveyorID] || 0}</td>
+            <td>${sEmail}</td>
+            <td>${sPhone}</td>
+            <td><span class="badge badge-success">${sDistrict}</span></td>
+            <td>${counts[sID] || 0}</td>
             <td>${statusBadge}</td>
             <td>
-                <div style="display: flex;">
-                    <button class="btn btn-outline btn-sm toggle-surveyor" data-id="${surveyor.surveyorID}" data-active="${isActive}" style="padding: 6px 10px; margin-right: 5px;">
+                <div style="display: flex; gap: 5px;">
+                    <button class="btn btn-outline btn-sm toggle-surveyor" data-id="${sID}" data-email="${sEmail}" data-active="${isActive}" style="padding: 6px 10px;">
                         <i class="fa-solid ${isActive ? 'fa-ban' : 'fa-check'}"></i> ${isActive ? 'Disable' : 'Enable'}
                     </button>
-                    ${isCEO ? `
-                    <button class="btn btn-outline btn-sm delete-surveyor" data-id="${surveyor.surveyorID}" style="padding: 6px 10px; border-color: var(--error-color); color: var(--error-color);">
+                    <button class="btn btn-outline btn-sm delete-surveyor" data-id="${sID}" data-email="${sEmail}" style="padding: 6px 10px; border-color: var(--error-color); color: var(--error-color);">
                         <i class="fa-solid fa-trash"></i>
                     </button>
-                    ` : ''}
                 </div>
             </td>
         `;
         tbody.appendChild(tr);
     });
 
-    // Delete Event
-    if (isCEO) {
-        document.querySelectorAll('.delete-surveyor').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                if(confirm('Are you sure you want to remove this surveyor from the database? (Note: Authentication deletion requires Firebase Admin SDK. This only removes DB access).')) {
-                    const id = e.currentTarget.getAttribute('data-id');
-                    try {
-                        const payload = {
-                            action: 'delete_row',
-                            sheetName: 'Surveyors',
-                            keyColumn: 0,
-                            keyValue: id
-                        };
-                        await fetch(GOOGLE_SCRIPT_URL, {
-                            method: 'POST',
-                            body: JSON.stringify(payload),
-                            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-                        });
-
-                        showToast('Surveyor removed from database.', 'success');
-                        fetchAllData();
-                    } catch(err) {
-                        showToast('Error removing: ' + err.message, 'error');
-                    }
-                }
-            });
-        });
-    }
-
-    // Toggle Status Event
-    document.querySelectorAll('.toggle-surveyor').forEach(btn => {
+    // Delete Surveyor Event (all admins can delete)
+    document.querySelectorAll('.delete-surveyor').forEach(btn => {
         btn.addEventListener('click', async (e) => {
-            const id = e.currentTarget.getAttribute('data-id');
-            const isActive = e.currentTarget.getAttribute('data-active') === 'true';
+            const btnEl = btn;
+            const id = btnEl.getAttribute('data-id');
+            const email = btnEl.getAttribute('data-email');
+            
+            if (!confirm('Are you sure you want to permanently remove this surveyor? They will be deleted from Google Sheets AND Firebase.')) return;
+            
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
             
             try {
-                const payload = {
-                    action: 'update_row',
-                    sheetName: 'Surveyors',
-                    keyColumn: 0,
-                    keyValue: id,
-                    updateData: {
-                        5: !isActive // IsActive is index 5 (Col F)
-                    }
-                };
-                await fetch(GOOGLE_SCRIPT_URL, {
+                // Delete from Google Sheets
+                const sheetRes = await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify({
+                        action: 'delete_row',
+                        sheetName: 'Surveyors',
+                        keyColumn: 0,
+                        keyValue: id
+                    }),
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' }
                 });
+                const sheetResult = await sheetRes.json();
+                if (sheetResult.status === 'error' && !sheetResult.message.includes('Not found')) {
+                    throw new Error('Sheet error: ' + sheetResult.message);
+                }
 
-                showToast(`Surveyor account ${isActive ? 'disabled' : 'enabled'}.`, 'success');
+                showToast('Surveyor permanently deleted!', 'success');
+                fetchAllData();
+            } catch(err) {
+                showToast('Deletion failed: ' + err.message, 'error');
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="fa-solid fa-trash"></i>';
+            }
+        });
+    });
+
+    // Toggle Surveyor Status Event
+    document.querySelectorAll('.toggle-surveyor').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const btnEl = btn;
+            const id = btnEl.getAttribute('data-id');
+            const email = btnEl.getAttribute('data-email');
+            const isActive = btnEl.getAttribute('data-active') === 'true';
+            btnEl.disabled = true;
+            
+            try {
+                // Update Google Sheets
+                const res = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'update_row',
+                        sheetName: 'Surveyors',
+                        keyColumn: 0,
+                        keyValue: id,
+                        updateData: { 6: !isActive } // IsActive is index 6 (col G: ID,Name,Email,Password,Phone,District,IsActive)
+                    }),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                const result = await res.json();
+                if (result.status === 'error') throw new Error('Sheet error: ' + result.message);
+
+                showToast(`Surveyor account ${isActive ? 'disabled' : 'enabled'} successfully!`, 'success');
                 fetchAllData();
             } catch(err) {
                 showToast('Error updating status: ' + err.message, 'error');
+                btnEl.disabled = false;
             }
         });
     });
@@ -586,6 +634,7 @@ function updateSurveyorsTable() {
 // Render Surveys Table
 function updateSurveyTable() {
     const tbody = document.querySelector('#surveys-table tbody');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
     const surveyorFilter = document.getElementById('filter-surveyor').value.toLowerCase();
@@ -593,30 +642,38 @@ function updateSurveyTable() {
     const villageFilter = document.getElementById('filter-village').value.toLowerCase();
     const cropFilter = document.getElementById('filter-crop').value.toLowerCase();
 
-    // Convert object to array and sort by date descending
     let surveys = Object.values(surveysData).sort((a,b) => new Date(b.surveyDate) - new Date(a.surveyDate));
 
     surveys.forEach(survey => {
-        const surveyorName = surveyorsData[survey.surveyorID] ? surveyorsData[survey.surveyorID].name : 'Unknown';
+        const sID = survey.surveyID;
+        const sDate = survey.surveyDate ? new Date(survey.surveyDate).toLocaleDateString() : 'N/A';
+        const farmerName = survey.farmerName || 'Unknown';
+        const district = survey.district || 'N/A';
+        const village = survey.village || 'N/A';
+        const mandal = survey.mandal || 'N/A';
+        const crop = survey.crop || 'N/A';
         
-        // Filtering
+        const sInfo = surveyorsData[survey.surveyorID];
+        const surveyorName = sInfo ? (sInfo.name || 'Unknown') : 'Unknown';
+        
         if (surveyorFilter && !surveyorName.toLowerCase().includes(surveyorFilter)) return;
-        if (districtFilter && !survey.district.toLowerCase().includes(districtFilter)) return;
-        if (villageFilter && !survey.village.toLowerCase().includes(villageFilter)) return;
-        if (cropFilter && !survey.crop.toLowerCase().includes(cropFilter)) return;
+        if (districtFilter && !district.toLowerCase().includes(districtFilter)) return;
+        if (villageFilter && !village.toLowerCase().includes(villageFilter)) return;
+        if (cropFilter && !crop.toLowerCase().includes(cropFilter)) return;
 
         const tr = document.createElement('tr');
-        const d = new Date(survey.surveyDate);
         
         tr.innerHTML = `
-            <td>${d.toLocaleDateString()}</td>
-            <td style="font-weight: 500;">${survey.farmerName}</td>
-            <td>${survey.village}, ${survey.mandal}, ${survey.district}</td>
-            <td><span class="badge badge-warning">${survey.crop}</span></td>
+            <td>${sDate}</td>
+            <td>${farmerName}</td>
+            <td>${village}, ${mandal}, ${district}</td>
+            <td><span class="badge badge-warning">${crop}</span></td>
             <td>${surveyorName}</td>
-            <td style="display: flex; gap: 5px;">
-                <button class="btn btn-secondary view-survey" data-id="${survey.surveyID}" style="padding: 6px 12px; font-size: 0.875rem;">View</button>
-                ${isCEO ? `<button class="btn btn-outline btn-sm delete-survey" data-id="${survey.surveyID}" style="padding: 6px 10px; border-color: var(--error-color); color: var(--error-color);"><i class="fa-solid fa-trash"></i></button>` : ''}
+            <td>
+                <div style="display: flex; gap: 5px;">
+                    <button class="btn btn-secondary btn-sm view-survey" data-id="${sID}">View</button>
+                    <button class="btn btn-outline btn-sm delete-survey" data-id="${sID}" style="border-color: var(--error-color); color: var(--error-color);"><i class="fa-solid fa-trash"></i></button>
+                </div>
             </td>
         `;
         tbody.appendChild(tr);
@@ -625,126 +682,131 @@ function updateSurveyTable() {
     // View Survey Events
     document.querySelectorAll('.view-survey').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const id = e.currentTarget.getAttribute('data-id');
+            const id = btn.getAttribute('data-id');
             viewSurveyDetails(id);
         });
     });
 
     // Delete Survey Events
-    if (isCEO) {
-        document.querySelectorAll('.delete-survey').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                if(confirm('Are you sure you want to PERMANENTLY delete this survey record?')) {
-                    const id = e.currentTarget.getAttribute('data-id');
-                    try {
-                        const payload = {
-                            action: 'delete_row',
-                            sheetName: 'Surveys',
-                            keyColumn: 0,
-                            keyValue: id
-                        };
-                        await fetch(GOOGLE_SCRIPT_URL, {
-                            method: 'POST',
-                            body: JSON.stringify(payload),
-                            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-                        });
-                        showToast('Survey permanently deleted.', 'success');
-                        fetchAllData();
-                    } catch(err) {
-                        showToast('Error deleting survey: ' + err.message, 'error');
-                    }
-                }
-            });
+    document.querySelectorAll('.delete-survey').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const btnEl = btn;
+            const id = btnEl.getAttribute('data-id');
+            if (!confirm('Are you sure you want to PERMANENTLY delete this survey record?')) return;
+            
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            
+            try {
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'delete_row',
+                        sheetName: 'Surveys',
+                        keyColumn: 0,
+                        keyValue: id
+                    }),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                showToast('Survey permanently deleted.', 'success');
+                fetchAllData();
+            } catch(err) {
+                showToast('Error deleting survey: ' + err.message, 'error');
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="fa-solid fa-trash"></i>';
+            }
         });
-    }
+    });
 }
 
 function viewSurveyDetails(surveyID) {
     const survey = surveysData[surveyID];
     if (!survey) return;
 
-    const surveyorName = surveyorsData[survey.surveyorID] ? surveyorsData[survey.surveyorID].name : 'Unknown';
+    const sInfo = surveyorsData[survey.surveyorID];
+    const surveyorName = sInfo ? (sInfo.name || 'Unknown') : 'Unknown';
     const content = document.getElementById('survey-details-content');
-    
-    // Format timestamp
-    const date = new Date(survey.surveyDate).toLocaleString();
+    const date = survey.surveyDate ? new Date(survey.surveyDate).toLocaleString() : 'N/A';
 
     let audioHtml = '<p class="mt-2" style="color: var(--text-light);">No audio recorded.</p>';
     if (survey.audioURL) {
         if (typeof survey.audioURL === 'string' && survey.audioURL.includes('drive.google.com') && survey.audioURL.includes('id=')) {
             const fileId = survey.audioURL.split('id=')[1].split('&')[0];
             audioHtml = `
-            <div class="mt-2" style="background-color: var(--bg-color); padding: 15px; border-radius: var(--radius);">
+            <div class="mt-3">
                 <p style="margin-bottom: 8px; font-weight: 600;">Farmer Suggestion Audio</p>
-                <div style="position: relative; width: 100%; height: 80px; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border-color);">
-                   <iframe src="https://drive.google.com/file/d/${fileId}/preview" width="100%" height="80" style="border: none;"></iframe>
+                <div style="width: 100%; height: 60px; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border-color); background: #eee;">
+                    <iframe src="https://drive.google.com/file/d/${fileId}/preview" width="100%" height="60" style="border: none;"></iframe>
                 </div>
                 <div class="mt-1" style="text-align: right;">
-                    <a href="${survey.audioURL}" target="_blank" style="font-size: 0.8rem; color: var(--primary-color);">Open in Google Drive <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                    <a href="${survey.audioURL}" target="_blank" style="font-size: 0.8rem; color: var(--primary-color);">Open in Drive <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                 </div>
             </div>`;
         } else {
-             audioHtml = `
-            <div class="mt-2" style="background-color: var(--bg-color); padding: 15px; border-radius: var(--radius);">
+            audioHtml = `
+            <div class="mt-3">
                 <p style="margin-bottom: 8px; font-weight: 600;">Farmer Suggestion Audio</p>
-                <audio id="preview-audio-player" controls src="${survey.audioURL}" style="width: 100%;"></audio>
+                <audio controls style="width: 100%;">
+                    <source src="${survey.audioURL}" type="audio/mpeg">
+                    Your browser does not support the audio element.
+                </audio>
             </div>`;
         }
     }
 
-    let mapLink = survey.latitude && survey.longitude ? 
-        `<a href="https://www.google.com/maps?q=${survey.latitude},${survey.longitude}" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-map"></i> View on Maps</a>` : 'No GPS';
-
-    let photoDisplay = '<p>No photo captured.</p>';
+    let photoHtml = '<p class="mt-2" style="color: var(--text-light);">No photo available.</p>';
     if (survey.photoURL) {
         if (typeof survey.photoURL === 'string' && survey.photoURL.includes('drive.google.com') && survey.photoURL.includes('id=')) {
             const fileId = survey.photoURL.split('id=')[1].split('&')[0];
-            photoDisplay = `
-            <div style="position: relative; width: 100%; max-width: 400px; height: 350px; margin: 0 auto; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border-color);">
+            photoHtml = `
+            <div class="mt-2" style="position: relative; border-radius: var(--radius); overflow: hidden; height: 350px; background-color: #eee; border: 1px solid var(--border-color);">
                 <iframe src="https://drive.google.com/file/d/${fileId}/preview" width="100%" height="100%" style="border: none;"></iframe>
             </div>
             <div class="mt-2 text-center">
-                <a href="${survey.photoURL}" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Full Image</a>
+                <a href="${survey.photoURL}" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> View Full Photo</a>
             </div>`;
         } else {
-            photoDisplay = `<a href="${survey.photoURL}" target="_blank" title="Click to view full image"><img src="${survey.photoURL}" style="max-width: 100%; max-height: 300px; border-radius: var(--radius); border: 1px solid var(--border-color);"></a>`;
+            photoHtml = `
+            <div class="mt-2" style="position: relative; border-radius: var(--radius); overflow: hidden; max-height: 400px; background-color: #eee; border: 1px solid var(--border-color);">
+                <img src="${survey.photoURL}" alt="Farmer Photo" style="width: 100%; height: auto; display: block;">
+            </div>
+            <div class="mt-2 text-center">
+                <a href="${survey.photoURL}" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> View Full Photo</a>
+            </div>`;
         }
     }
 
     content.innerHTML = `
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
             <div>
-                <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px;">Farmer Details</h4>
+                <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px;">Farmer Info</h4>
                 <p><strong>Name:</strong> ${survey.farmerName}</p>
                 <p><strong>Phone:</strong> ${survey.phone}</p>
-                <p><strong>Date:</strong> ${date}</p>
-                <p><strong>Surveyor:</strong> ${surveyorName}</p>
-
-                <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; margin-top: 20px;">Location Details</h4>
+                <p><strong>Crop:</strong> <span class="badge badge-warning">${survey.crop}</span></p>
+                <p><strong>Land Size:</strong> ${survey.landSize} Acres</p>
+                
+                <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; margin-top: 25px;">Location</h4>
                 <p><strong>State:</strong> ${survey.state}</p>
                 <p><strong>District:</strong> ${survey.district}</p>
                 <p><strong>Mandal:</strong> ${survey.mandal}</p>
                 <p><strong>Village:</strong> ${survey.village}</p>
-                <div class="mt-1">${mapLink}</div>
+                ${survey.latitude ? `<p style="margin-top:10px;"><a href="https://www.google.com/maps?q=${survey.latitude},${survey.longitude}" target="_blank" class="btn btn-outline btn-sm"><i class="fa-solid fa-location-dot"></i> View on Google Maps</a></p>` : ''}
             </div>
-            
             <div>
-                <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px;">Agriculture Details</h4>
-                <p><strong>Crop:</strong> <span class="badge badge-warning">${survey.crop}</span></p>
-                <p><strong>Land Size:</strong> ${survey.landSize} Acres</p>
+                <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px;">Survey Info</h4>
+                <p><strong>Surveyor:</strong> ${surveyorName}</p>
+                <p><strong>Date:</strong> ${date}</p>
                 
-                <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; margin-top: 20px;">Feedback</h4>
-                <p><em>"${survey.suggestion || 'No text suggestion provided.'}"</em></p>
+                <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; margin-top: 25px;">Surveyor Suggestions</h4>
+                <p style="font-style: italic; color: var(--text-light);">"${survey.suggestion || 'No suggestion provided.'}"</p>
+                
+                <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; margin-top: 25px;">Media</h4>
+                ${photoHtml}
                 ${audioHtml}
             </div>
         </div>
-        
-        <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; margin-top: 20px;">Enclosure</h4>
-        <div style="text-align: center;">
-            ${photoDisplay}
-        </div>
     `;
-
+    
     document.getElementById('survey-details-modal').classList.add('active');
 }
 
@@ -949,3 +1011,5 @@ function exportToCSV() {
     link.click();
     document.body.removeChild(link);
 }
+
+// End of Admin JS script

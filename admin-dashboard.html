@@ -111,7 +111,9 @@
                 <div class="table-card">
                     <div class="table-header">
                         <h2 style="margin: 0; font-size: 1.25rem;">Surveyor Management</h2>
-                        <button class="btn btn-primary" id="open-add-surveyor-btn"><i class="fa-solid fa-plus"></i> Add Surveyor</button>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-primary" id="open-add-surveyor-btn"><i class="fa-solid fa-plus"></i> Add Surveyor</button>
+                        </div>
                     </div>
                     <div style="overflow-x: auto;">
                         <table id="surveyors-table">
@@ -139,7 +141,9 @@
                 <div class="table-card">
                     <div class="table-header">
                         <h2 style="margin: 0; font-size: 1.25rem;">Admin Management</h2>
-                        <button class="btn btn-primary" id="open-add-admin-btn"><i class="fa-solid fa-user-shield"></i> Add Admin</button>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-primary" id="open-add-admin-btn"><i class="fa-solid fa-user-shield"></i> Add Admin</button>
+                        </div>
                     </div>
                     <div style="overflow-x: auto;">
                         <table id="admins-table">
@@ -281,7 +285,6 @@
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script type="module" src="js/firebase-config.js"></script>
     <script type="module" src="js/auth.js"></script>
     <script type="module" src="js/admin.js"></script>
     <script>

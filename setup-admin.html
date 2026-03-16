@@ -53,17 +53,21 @@
 
     <div id="toast-container"></div>
 
-    <script type="module" src="js/firebase-config.js"></script>
     <script type="module">
-        import { auth, db } from "./js/firebase-config.js";
-        import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-        import { ref, set } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-aBhSAfN3-8Vk-1LAYCkhpKBHkflLofPDVS2rI8sXXeQGQu3JxgvMpJYQ2giubccYnQ/exec';
+
+        async function hashPassword(password) {
+            const msgBuffer = new TextEncoder().encode(password);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
 
         document.getElementById('setup-admin-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const name = document.getElementById('admin-name').value;
-            const email = document.getElementById('admin-email').value;
+            const name = document.getElementById('admin-name').value.trim();
+            const email = document.getElementById('admin-email').value.trim();
             const password = document.getElementById('admin-password').value;
             
             const btnText = document.getElementById('setup-text');
@@ -75,40 +79,42 @@
             spinner.classList.remove('hidden');
             
             try {
-                // 1. Try to create User, if it fails because it exists, just sign in
-                let uid;
-                try {
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                    uid = userCredential.user.uid;
-                } catch (createError) {
-                    if(createError.code === 'auth/email-already-in-use') {
-                        // User exists, sign in instead to get UID
-                        const { signInWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js");
-                        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                        uid = userCredential.user.uid;
-                    } else {
-                        throw createError;
-                    }
-                }
-                
-                // Determine if this is the CEO
-                const isAdminCEO = email.toLowerCase() === 'nlr@kk.com';
-                
-                // 2. Add/Update admins node in Realtime Database
-                await set(ref(db, `admins/${uid}`), {
-                    adminID: uid,
-                    name: name,
-                    email: email,
-                    role: isAdminCEO ? 'ceo' : 'admin',
-                    createdAt: new Date().toISOString()
+                const hashedPassword = await hashPassword(password);
+                const adminID = `ADM_${Date.now()}`;
+                const isAdminCEO = email.toLowerCase() === 'nlr@kk.com' || email.toLowerCase() === 'admin@kk.com';
+
+                const payload = {
+                    action: 'create_user',
+                    sheetName: 'Admins',
+                    rowData: [
+                        adminID,
+                        name,
+                        email,
+                        hashedPassword,
+                        isAdminCEO ? 'ceo' : 'admin',
+                        true,
+                        new Date().toISOString()
+                    ]
+                };
+
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
                 });
+
+                const result = await response.json();
                 
-                msg.textContent = "Admin account synchronized successfully! You can now go to login.";
-                msg.style.color = "var(--success-color)";
+                if (result.status === 'success') {
+                    msg.textContent = "Admin account created in Google Sheets successfully! You can now login.";
+                    msg.style.color = "var(--success-color)";
+                } else {
+                    throw new Error(result.message || "Failed to save to Google Sheets.");
+                }
                 msg.classList.remove('hidden');
                 
             } catch (error) {
-                msg.textContent = error.message.replace('Firebase:', '').trim();
+                msg.textContent = error.message;
                 msg.style.color = "var(--error-color)";
                 msg.classList.remove('hidden');
             } finally {

@@ -1,4 +1,3 @@
-import { db } from "./firebase-config.js";
 import { showToast } from "./auth.js";
 
 // State
@@ -224,7 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let finalAudioURL = null;
 
                 // Upload Media to Google Drive via Apps Script
-                const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxF9f1Dm_AlufYqNEctWyGrVSLpA4oSwbm_e9xhmkMpm-j1Hm7ZLQ6yWPQELFzd0-kQ/exec';
+                const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-aBhSAfN3-8Vk-1LAYCkhpKBHkflLofPDVS2rI8sXXeQGQu3JxgvMpJYQ2giubccYnQ/exec';
 
                 if (photoBase64) {
                     submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading Photo to Drive...';
@@ -474,7 +473,7 @@ export async function syncOfflineData() {
     for (const record of offlineSurveys) {
         try {
             // Since offline surveys already store base64 directly, we can just upload them to drive now during sync
-            const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxF9f1Dm_AlufYqNEctWyGrVSLpA4oSwbm_e9xhmkMpm-j1Hm7ZLQ6yWPQELFzd0-kQ/exec';
+            const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-aBhSAfN3-8Vk-1LAYCkhpKBHkflLofPDVS2rI8sXXeQGQu3JxgvMpJYQ2giubccYnQ/exec';
             let finalPhotoURL = record.data.photoURL; // Might already be a URL if logic changed, but usually base64 here
             let finalAudioURL = record.data.audioURL;
 

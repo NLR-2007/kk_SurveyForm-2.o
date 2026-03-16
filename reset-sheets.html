@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sheet Reset Utility - Kisaan Krushi</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .reset-container {
+            max-width: 500px;
+            margin: 100px auto;
+            padding: 30px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+        .warning-box {
+            background: rgba(231, 76, 60, 0.1);
+            color: var(--error-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            border: 1px solid var(--error-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="reset-container">
+        <i class="fa-solid fa-triangle-exclamation" style="font-size: 3rem; color: var(--error-color); margin-bottom: 20px;"></i>
+        <h2>System Reset Utility</h2>
+        <p style="color: var(--text-light); margin-bottom: 25px;">This will clear ALL data from Admins, Surveyors, and Surveys sheets and set the correct column headers.</p>
+        
+        <div class="warning-box">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <strong>WARNING:</strong> This action cannot be undone. All current records will be permanently deleted.
+        </div>
+
+        <button id="reset-btn" class="btn btn-primary" style="background-color: var(--error-color); border-color: var(--error-color); width: 100%;">
+            <span id="reset-text">Reset All Sheets & Fix Columns</span>
+            <i class="fa-solid fa-spinner fa-spin hidden" id="reset-spinner"></i>
+        </button>
+
+        <p id="status-msg" class="mt-3 hidden"></p>
+        
+        <div class="mt-4">
+            <a href="setup-admin.html" class="btn btn-outline" style="width: 100%;">Go to Admin Setup</a>
+        </div>
+    </div>
+
+    <script type="module">
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-aBhSAfN3-8Vk-1LAYCkhpKBHkflLofPDVS2rI8sXXeQGQu3JxgvMpJYQ2giubccYnQ/exec';
+
+        document.getElementById('reset-btn').addEventListener('click', async () => {
+            if (!confirm('Are you absolutely sure? This will delete all your current data!')) return;
+
+            const btn = document.getElementById('reset-btn');
+            const btnText = document.getElementById('reset-text');
+            const spinner = document.getElementById('reset-spinner');
+            const statusMsg = document.getElementById('status-msg');
+
+            btn.disabled = true;
+            btnText.classList.add('hidden');
+            spinner.classList.remove('hidden');
+            statusMsg.classList.add('hidden');
+
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'reset_sheets' }),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+
+                const result = await response.json();
+                if (result.status === 'success') {
+                    statusMsg.textContent = "✅ System Reset Successful! Sheets columns fixed and old data deleted.";
+                    statusMsg.style.color = "var(--success-color)";
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                statusMsg.textContent = "❌ Error: " + error.message;
+                statusMsg.style.color = "var(--error-color)";
+            } finally {
+                statusMsg.classList.remove('hidden');
+                btnText.classList.remove('hidden');
+                spinner.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
