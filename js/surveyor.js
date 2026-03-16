@@ -42,7 +42,14 @@ async function fetchMySurveys(surveyorID) {
     
     try {
         const response = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Surveys`);
-        const result = await response.json();
+        const rawText = await response.text();
+        let result;
+        try {
+            result = JSON.parse(rawText);
+        } catch(e) {
+            console.error("My Surveys JSON Error:", rawText.substring(0, 100));
+            return;
+        }
 
         if (result.status === 'success') {
             const data = result.data;

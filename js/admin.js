@@ -236,7 +236,15 @@ async function fetchAllData() {
 // Fetch Surveyors
 async function fetchSurveyors() {
     const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Surveyors`);
-    const result = await res.json();
+    const rawText = await res.text();
+    let result;
+    try {
+        result = JSON.parse(rawText);
+    } catch(e) {
+        console.error("Surveyors JSON Error:", rawText.substring(0, 100));
+        return;
+    }
+    
     surveyorsData = {};
     if (result.status === 'success' && result.data) {
         result.data.forEach(s => {
@@ -256,7 +264,15 @@ async function fetchSurveyors() {
 // Fetch Surveys
 async function fetchSurveys() {
     const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Surveys`);
-    const result = await res.json();
+    const rawText = await res.text();
+    let result;
+    try {
+        result = JSON.parse(rawText);
+    } catch(e) {
+        console.error("Surveys JSON Error:", rawText.substring(0, 100));
+        return;
+    }
+    
     surveysData = {};
     if (result.status === 'success' && result.data) {
         result.data.forEach(survey => {
@@ -285,7 +301,15 @@ async function fetchSurveys() {
 // Fetch Admins
 async function fetchAdmins() {
     const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=Admins`);
-    const result = await res.json();
+    const rawText = await res.text();
+    let result;
+    try {
+        result = JSON.parse(rawText);
+    } catch(e) {
+        console.error("Admins JSON Error:", rawText.substring(0, 100));
+        return;
+    }
+    
     adminsData = {};
     if (result.status === 'success' && result.data) {
         result.data.forEach(a => {
