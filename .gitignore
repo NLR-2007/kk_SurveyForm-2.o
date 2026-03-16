@@ -1,0 +1,11 @@
+# Temporary data files (local only, may contain private data)
+surveyors.json
+admins.json
+surveys.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/

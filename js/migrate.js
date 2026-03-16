@@ -1,7 +1,106 @@
 import { db } from "./firebase-config.js";
-import { ref, get, child } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+import { ref, get } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxF9f1Dm_AlufYqNEctWyGrVSLpA4oSwbm_e9xhmkMpm-j1Hm7ZLQ6yWPQELFzd0-kQ/exec';
+
+// -----------------------------------------------------------
+// FIX HEADERS — reads all raw rows, clears sheet, re-inserts
+// with proper header row first.
+// -----------------------------------------------------------
+const SHEET_HEADERS = {
+    Surveyors: ['SurveyorID', 'Name', 'Email', 'Phone', 'District', 'IsActive', 'CreatedAt'],
+    Admins:    ['AdminID', 'Name', 'Email', 'Role', 'IsActive', 'CreatedAt'],
+    Surveys:   ['SurveyID', 'Date', 'FarmerName', 'Phone', 'State', 'District', 'Mandal', 'Village', 'Latitude', 'Longitude', 'Crop', 'LandSize', 'Suggestion', 'PhotoURL', 'AudioURL', 'SurveyorID']
+};
+
+async function postToSheet(payload) {
+    const res = await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+    });
+    const rawText = await res.text();
+    let result;
+    try { result = JSON.parse(rawText); }
+    catch(e) { throw new Error("Invalid response: " + rawText.substring(0, 50)); }
+    if (result.status !== 'success') throw new Error(result.message || 'Unknown error');
+    return result;
+}
+
+async function fixSheetHeaders(sheetName) {
+    logMessage(`📋 Reading current data from ${sheetName}...`);
+
+    // 1. Fetch existing raw data from the sheet
+    const res = await fetch(`${GOOGLE_SCRIPT_URL}?sheetName=${sheetName}`);
+    const rawText = await res.text();
+    let result;
+    try { result = JSON.parse(rawText); }
+    catch(e) { throw new Error("Could not parse response from sheet."); }
+
+    const rows = (result.data && Array.isArray(result.data)) ? result.data : [];
+    logMessage(`Found ${rows.length} rows. Extracting and deduplicating...`);
+
+    // 2. Extract raw values from each row object (skip _rowIndex key)
+    const allDataRows = rows.map(row => {
+        return Object.entries(row)
+            .filter(([k]) => k !== '_rowIndex')
+            .map(([, v]) => v);
+    });
+
+    // 3. Deduplicate by the first column (ID column) — keeps the LAST occurrence of each ID
+    const seenIds = new Set();
+    const uniqueRows = [];
+    for (let i = allDataRows.length - 1; i >= 0; i--) {
+        const id = String(allDataRows[i][0]).trim();
+        // Skip rows where the first column looks like a header (e.g. "SurveyorID", "AdminID")
+        if (!id || SHEET_HEADERS[sheetName].includes(id)) continue;
+        if (!seenIds.has(id)) {
+            seenIds.add(id);
+            uniqueRows.unshift(allDataRows[i]); // re-add in original order
+        }
+    }
+
+    const removed = allDataRows.length - uniqueRows.length;
+    if (removed > 0) logMessage(`🔁 Removed ${removed} duplicate(s).`);
+
+    // 4. Clear the sheet completely
+    logMessage(`🗑️ Clearing ${sheetName} sheet...`);
+    await postToSheet({ action: 'clear_sheet', sheetName });
+
+    // 5. Insert the proper header row first
+    logMessage(`✏️ Inserting header row...`);
+    await postToSheet({ action: 'append_row', sheetName, rowData: SHEET_HEADERS[sheetName] });
+
+    // 6. Re-insert unique data rows
+    logMessage(`📥 Re-inserting ${uniqueRows.length} unique rows...`);
+    for (const row of uniqueRows) {
+        await postToSheet({ action: 'append_row', sheetName, rowData: row });
+    }
+
+    logMessage(`✅ ${sheetName} fixed! ${uniqueRows.length} unique rows preserved.`);
+}
+
+
+document.getElementById('btn-fix-surveyors').addEventListener('click', async (e) => {
+    const btn = e.target; btn.disabled = true;
+    try { await fixSheetHeaders('Surveyors'); }
+    catch(err) { logMessage(`❌ Error: ${err.message}`); }
+    finally { btn.disabled = false; }
+});
+
+document.getElementById('btn-fix-admins').addEventListener('click', async (e) => {
+    const btn = e.target; btn.disabled = true;
+    try { await fixSheetHeaders('Admins'); }
+    catch(err) { logMessage(`❌ Error: ${err.message}`); }
+    finally { btn.disabled = false; }
+});
+
+document.getElementById('btn-fix-surveys').addEventListener('click', async (e) => {
+    const btn = e.target; btn.disabled = true;
+    try { await fixSheetHeaders('Surveys'); }
+    catch(err) { logMessage(`❌ Error: ${err.message}`); }
+    finally { btn.disabled = false; }
+});
 
 const logDiv = document.getElementById('log');
 function logMessage(msg) {

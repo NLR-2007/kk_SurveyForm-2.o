@@ -3,24 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Migrate Firebase to Google Sheets</title>
+    <title>Migration & Fix Tool</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; padding: 20px; text-align: center; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #4caf50; color: white; border: none; border-radius: 4px; margin: 10px; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        #log { margin-top: 20px; text-align: left; max-width: 800px; margin-left: auto; margin-right: auto; max-height: 400px; overflow-y: auto; background: #f5f5f5; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 14px; }
+        body { font-family: 'Inter', sans-serif; padding: 20px; text-align: center; background: #f0f4f8; }
+        h1 { color: #1a1a2e; }
+        .card { background: white; border-radius: 12px; padding: 20px; max-width: 820px; margin: 20px auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: left; }
+        .card h2 { margin-top: 0; font-size: 1.1rem; }
+        .btn-fix { padding: 10px 20px; font-size: 15px; cursor: pointer; background: #e53935; color: white; border: none; border-radius: 6px; margin: 6px; }
+        .btn-fix:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-migrate { padding: 10px 20px; font-size: 15px; cursor: pointer; background: #4caf50; color: white; border: none; border-radius: 6px; margin: 6px; }
+        .btn-migrate:disabled { background: #ccc; cursor: not-allowed; }
+        .badge { background: #e53935; color: white; font-size: 11px; padding: 2px 8px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+        #log { text-align: left; max-height: 350px; overflow-y: auto; background: #1a1a2e; color: #a8ff78; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 13px; margin-top: 10px; }
+        .note { background: #fff8e1; border-left: 4px solid #ffc107; padding: 10px 14px; border-radius: 4px; font-size: 14px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
-    <h1>Data Migration Tool</h1>
-    <p>This tool will fetch all data from Firebase and insert it into your Google Sheets.</p>
-    <div>
-        <button id="btn-migrate-surveyors">Migrate Surveyors</button>
-        <button id="btn-migrate-admins">Migrate Admins</button>
-        <button id="btn-migrate-surveys">Migrate Surveys</button>
+    <h1><i class="fa-solid fa-database"></i> Migration & Fix Tool</h1>
+
+    <div class="card">
+        <h2><span class="badge">STEP 1</span> &nbsp;Fix Sheet Headers <small style="color:#888;font-weight:normal;">(Run this FIRST if data is not showing)</small></h2>
+        <div class="note">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            Your Google Sheets are <strong>missing header rows</strong>. Click each button below to insert the correct headers at the top of each sheet. This will make all your data visible in the dashboard.
+        </div>
+        <div>
+            <button class="btn-fix" id="btn-fix-surveyors"><i class="fa-solid fa-wrench"></i> Fix Surveyors Headers</button>
+            <button class="btn-fix" id="btn-fix-admins"><i class="fa-solid fa-wrench"></i> Fix Admins Headers</button>
+            <button class="btn-fix" id="btn-fix-surveys"><i class="fa-solid fa-wrench"></i> Fix Surveys Headers</button>
+        </div>
     </div>
-    <div id="log">Logs will appear here...</div>
+
+    <div class="card">
+        <h2><span style="background:#4caf50;color:white;font-size:11px;padding:2px 8px;border-radius:20px;margin-right:8px;">STEP 2</span> Migrate Data from Firebase</h2>
+        <div>
+            <button class="btn-migrate" id="btn-migrate-surveyors">Migrate Surveyors</button>
+            <button class="btn-migrate" id="btn-migrate-admins">Migrate Admins</button>
+            <button class="btn-migrate" id="btn-migrate-surveys">Migrate Surveys</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2><i class="fa-solid fa-terminal"></i> Logs</h2>
+        <div id="log">Ready. Click a button above to start...</div>
+    </div>
 
     <script type="module" src="js/migrate.js"></script>
 </body>
