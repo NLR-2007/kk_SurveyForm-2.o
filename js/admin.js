@@ -354,17 +354,19 @@ function updateAdminsTable() {
             `;
         }
 
+        const adminName = admin.name || 'Unknown Admin';
+        
         tr.innerHTML = `
             <td>
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <div class="avatar" style="width: 32px; height: 32px; font-size: 0.875rem;">${admin.name.charAt(0)}</div>
+                    <div class="avatar" style="width: 32px; height: 32px; font-size: 0.875rem;">${adminName.charAt(0)}</div>
                     <div>
-                        <div style="font-weight: 500;">${admin.name} ${isCurrentCEO ? '<span class="badge badge-primary" style="background:var(--gradient-primary);color:white">CEO</span>' : ''}</div>
+                        <div style="font-weight: 500;">${adminName} ${isCurrentCEO ? '<span class="badge badge-primary" style="background:var(--gradient-primary);color:white">CEO</span>' : ''}</div>
                     </div>
                 </div>
             </td>
-            <td>${admin.email}</td>
-            <td>${new Date(admin.createdAt).toLocaleDateString()}</td>
+            <td>${admin.email || 'No Email'}</td>
+            <td>${admin.createdAt ? new Date(admin.createdAt).toLocaleDateString() : 'N/A'}</td>
             <td>${statusBadge}</td>
             <td>
                 <div style="display: flex;">
@@ -448,19 +450,21 @@ function updateSurveyorsTable() {
         const isActive = surveyor.isActive !== false;
         let statusBadge = `<span class="badge ${isActive ? 'badge-success' : 'badge-warning'}">${isActive ? 'Active' : 'Inactive'}</span>`;
 
+        const surveyorName = surveyor.name || 'Unknown Surveyor';
+        
         tr.innerHTML = `
             <td>
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <div class="avatar" style="width: 32px; height: 32px; font-size: 0.875rem;">${surveyor.name.charAt(0)}</div>
+                    <div class="avatar" style="width: 32px; height: 32px; font-size: 0.875rem;">${surveyorName.charAt(0)}</div>
                     <div>
-                        <div style="font-weight: 500;">${surveyor.name}</div>
+                        <div style="font-weight: 500;">${surveyorName}</div>
                         <div style="font-size: 0.75rem; color: var(--text-light);">${surveyor.surveyorID.slice(0, 8)}...</div>
                     </div>
                 </div>
             </td>
-            <td>${surveyor.email}</td>
-            <td>${surveyor.phone}</td>
-            <td><span class="badge badge-success">${surveyor.district}</span></td>
+            <td>${surveyor.email || 'No Email'}</td>
+            <td>${surveyor.phone || 'No Phone'}</td>
+            <td><span class="badge badge-success">${surveyor.district || 'All'}</span></td>
             <td>${counts[surveyor.surveyorID] || 0}</td>
             <td>${statusBadge}</td>
             <td>
